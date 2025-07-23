@@ -10,7 +10,7 @@ class Config:
      JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY','another_super_secret_jwt_key') 
     
     # How long the main "access" ID card is valid 
-     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
+     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=60)
     
     # How long a "refresh" ID card is valid 
      JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
