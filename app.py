@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from flask_restful import Api
 from flask_sqlalchemy import SQLAlchemy
@@ -16,9 +17,11 @@ from resources.checkStatus import Status
 # Load environment variables (your secret keys!)
 load_dotenv()
 
+CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "http://localhost:5173")
+
 app = Flask(__name__)
 app.config.from_object(Config)
-CORS(app,supports_credentials=True,origins=["http://localhost:5173"])
+CORS(app,supports_credentials=True,origins=[CORS_ORIGIN])
 
 db.init_app(app)
 migrate.init_app(app, db)
