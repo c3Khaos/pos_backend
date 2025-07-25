@@ -23,6 +23,7 @@ netifaces==0.10.6
 packaging==24.2
 pipenv==2024.4.1
 platformdirs==4.3.6
+psycopg2-binary==2.9.10
 PyJWT==2.9.0
 python-dotenv==1.0.1
 pytz==2025.2
