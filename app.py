@@ -11,6 +11,7 @@ from config import Config
 from resources.products import ProductListResource
 from resources.sales import SaleListResource
 from auth import LoginResource, RegisterResource
+from resources.checkStatus import Status
 
 # Load environment variables (your secret keys!)
 load_dotenv()
@@ -23,12 +24,14 @@ db.init_app(app)
 migrate.init_app(app, db)
 jwt.init_app(app) # Initialize JWT tool for ID cards
 
+with app.app_context():
 #import and register resources
-api = Api(app)
-api.add_resource(ProductListResource,"/products")
-api.add_resource(SaleListResource, "/sales")
-api.add_resource(RegisterResource, "/register")
-api.add_resource(LoginResource, "/login")
+    api = Api(app)
+    api.add_resource(ProductListResource,"/products")
+    api.add_resource(SaleListResource, "/sales")
+    api.add_resource(RegisterResource, "/register")
+    api.add_resource(LoginResource, "/login")
+    api.add_resource(Status, '/auth/status')
 
 @app.route("/")
 def index():
