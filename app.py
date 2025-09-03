@@ -13,7 +13,7 @@ from resources.products import ProductListResource
 from resources.sales import SaleListResource
 from auth import LoginResource, RegisterResource
 from resources.checkStatus import Status 
-from resources.payment import PaymentResource,PaymentCallbackResource
+from resources.payment import PaymentResource,PaymentCallbackResource,CheckPaymentStatusResource
 
 # Load environment variables (your secret keys!)
 load_dotenv()
@@ -38,6 +38,7 @@ with app.app_context():
     api.add_resource(Status, '/auth/status')
     api.add_resource(PaymentResource, "/payments")
     api.add_resource(PaymentCallbackResource, "/payments/callback")
+    api.add_resource(CheckPaymentStatusResource,"/payments/check/<string:checkout_request_id>")
 
 @app.route("/")
 def index():
