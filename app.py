@@ -13,6 +13,7 @@ from resources.products import ProductListResource
 from resources.sales import SaleListResource
 from auth import LoginResource, RegisterResource
 from resources.checkStatus import Status 
+from resources.graphs import SalesTrend
 from resources.payment import PaymentResource,PaymentCallbackResource,CheckPaymentStatusResource
 
 # Load environment variables (your secret keys!)
@@ -37,6 +38,7 @@ with app.app_context():
     api.add_resource(LoginResource, "/login")
     api.add_resource(Status, '/auth/status')
     api.add_resource(PaymentResource, "/payments")
+    api.add_resource(SalesTrend,"/salestrend")
     api.add_resource(PaymentCallbackResource, "/payments/callback")
     api.add_resource(CheckPaymentStatusResource,"/payments/check/<string:checkout_request_id>")
 

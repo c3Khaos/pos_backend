@@ -1,6 +1,6 @@
 from flask import request, session
 from flask_restful import Resource
-from models import Sale, User, SaleItem
+from models import Sale, User, SaleItem,Product
 from extensions import db
 from datetime import datetime
 
@@ -63,6 +63,13 @@ class SaleListResource(Resource):
                 if not product_id or not product_name or not quantity or not price_from_frontend:
                     raise ValueError("Invalid item data within sale.")
                 
+                product = Product.query.get(product_id)
+
+                if product.stock < quantity:
+                    return {f"Not enough stock for {product.name}.Available stock :{product.stock}"},409
+                
+                product.stock -= quantity 
+            
 
                 new_sale_item = SaleItem(
                     sale_id=new_sale.id, 
