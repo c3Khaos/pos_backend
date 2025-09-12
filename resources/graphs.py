@@ -1,14 +1,15 @@
 from  flask_restful import Resource
 from models import db
+from sqlalchemy import text
 
 class SalesTrend(Resource):
     def get(self):
-        query = """
-        SELECT DATE(sale_date) as day, SUM(amount) as total_sales
+        query = text("""
+        SELECT DATE(sale_date) as day, SUM(total_amount) as total_sales
         FROM sales
         GROUP BY DATE(sale_date)
         ORDER BY day ASC
-        """
+        """)
 
         result = db.session.execute(query).fetchall()
 
