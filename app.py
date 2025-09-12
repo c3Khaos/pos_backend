@@ -19,7 +19,7 @@ from resources.payment import PaymentResource,PaymentCallbackResource,CheckPayme
 # Load environment variables (your secret keys!)
 load_dotenv()
 
-CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "http://localhost:5173")
+CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "https://pos-frontend-3l2z.onrender.com")
 
 app = Flask(__name__)
 app.config.from_object(Config)
