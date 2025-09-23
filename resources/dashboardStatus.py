@@ -9,7 +9,7 @@ class DashboardInfo(Resource):
             total_users = db.session.query(User).count()
             total_products = db.session.query(Product).count()
             total_profit = db.session.query(func.sum(SaleItem.profit)).scalar()
-            total_sales = db.session.query(func.sum(SaleItem.price)).scalar()
+            total_sales = db.session.query(func.sum(SaleItem.price * SaleItem.quantity)).scalar()
 
             return {
                 "total_users":total_users,
