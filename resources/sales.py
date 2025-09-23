@@ -1,6 +1,6 @@
 from flask import request, session
 from flask_restful import Resource
-from models import Sale, User, SaleItem,Product
+from models import Sale, SaleItem,Product
 from extensions import db
 from datetime import datetime
 
@@ -10,7 +10,7 @@ class SaleListResource(Resource):
     @jwt_required()
     def get(self):
         current_user_id = get_jwt_identity()
-        sales = sales = Sale.query.filter_by(user_id=current_user_id).all()
+        sales = Sale.query.filter_by(user_id=current_user_id).all()
         return [sale.to_dict() for sale in sales], 200
     @jwt_required()
     def post(self):
@@ -48,7 +48,8 @@ class SaleListResource(Resource):
                 change_given=change_given,
                 payment_method=payment_method,
                 sale_date=sale_date, 
-                user_id=user_id
+                user_id=user_id,
+                
             )
 
             db.session.add(new_sale)
@@ -59,17 +60,16 @@ class SaleListResource(Resource):
                 product_name = item_data.get('name')
                 quantity = item_data.get('quantity')
                 price_from_frontend = item_data.get('price')
-
+               
                 if not product_id or not product_name or not quantity or not price_from_frontend:
                     raise ValueError("Invalid item data within sale.")
                 
                 product = Product.query.get(product_id)
-
+                profit = (price_from_frontend - product.unit_price) * quantity
                 if product.stock < quantity:
                     return {f"Not enough stock for {product.name}.Available stock :{product.stock}"},409
                 
                 product.stock -= quantity 
-            
 
                 new_sale_item = SaleItem(
                     sale_id=new_sale.id, 
@@ -77,8 +77,10 @@ class SaleListResource(Resource):
                     name=product_name,
                     quantity=quantity,
                     price=price_from_frontend,
+                    profit = profit
                     
                 )
+                print(new_sale_item)
                 db.session.add(new_sale_item)
 
             db.session.commit() 

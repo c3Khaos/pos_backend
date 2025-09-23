@@ -65,6 +65,7 @@ class SaleItem(db.Model):
     name = db.Column(db.String(120), nullable=False) 
     quantity = db.Column(db.Integer, nullable=False)
     price = db.Column(db.Float, nullable=False) 
+    profit = db.Column(db.Float,nullable=False)
 
     sale = db.relationship("Sale", back_populates="items") # Link back to the Sale model
 
@@ -73,7 +74,8 @@ class SaleItem(db.Model):
             "product_id": self.product_id,
             "name": self.name,
             "quantity": self.quantity,
-            "price": self.price
+            "price": self.price,
+            "profit":self.profit
         }
 
     
@@ -84,6 +86,7 @@ class Product(db.Model):
     name = db.Column(db.String(80), nullable=False)
     category = db.Column(db.String(80), nullable=False)
     price = db.Column(db.Float, nullable=False)
+    unit_price = db.Column(db.Float , nullable = False)
     stock = db.Column(db.Integer, nullable=False)
 
 
@@ -93,5 +96,6 @@ class Product(db.Model):
             "name": self.name,
             "category": self.category,
             "price": self.price,
+            "unit_price": self.unit_price,
             "stock": self.stock,
         }

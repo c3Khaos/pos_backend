@@ -12,7 +12,7 @@ class LoginResource(Resource):
         password = data.get("password")
 
         if not username or not password:
-            return {"error": "Username and password are required."}, 400
+            return {"error": "Username and password are required."}, 408
 
         user = User.query.filter_by(username=username).first()
 
@@ -36,17 +36,17 @@ class RegisterResource(Resource):
     def post(self):
         data = request.get_json()
         if User.query.filter_by(username=data['username']).first():
-            return {"error": "Username already exists"}, 400
+            return {"error": "Username already exists"}, 402
 
         username = data.get("username")
         email = data.get("email")
         password = data.get("password")
 
         if not username or not email or not password:
-            return {"error": "All fields are required"}, 400
+            return {"error": "All fields are required"}, 403
 
         if User.query.filter_by(username=username).first() or User.query.filter_by(email=email).first():
-            return {"error": "Username or email already exists"}, 400
+            return {"error": "Username or email already exists"}, 404
 
 
         # Default role since no role comes from the front end

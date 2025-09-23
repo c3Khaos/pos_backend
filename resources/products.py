@@ -15,6 +15,7 @@ class ProductListResource(Resource):
             name = data.get('name'),
             category =data.get('category'),
             price = data.get("price"),
+            unit_price = data.get('unit_price'),
             stock = data.get('stock')
         )
 

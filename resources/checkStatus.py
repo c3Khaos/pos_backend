@@ -1,13 +1,11 @@
 from flask_restful import Resource
 from models import User
 
-class Status(Resource):
+class UsersExist(Resource):
     def get(self):
         user_count = User.query.count()
 
-        if user_count == 0:
-            return {'message': 'No users registered', 'has_users': False}, 200
-        else:
-            return {'message': f'{user_count} users registered', 'has_users': True}, 200
-
-
+        return {
+            "exists": user_count > 0,
+            "count": user_count
+        }, 200
