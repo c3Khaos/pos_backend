@@ -72,7 +72,7 @@ class Mpesa:
             "PartyB": int(self.business_short_code),              
             "PhoneNumber": phone,
             "CallBackURL": self.callback_url,                     
-            "AccountReference": "JoyceFeeds",                     
+            "AccountReference": "Joycestores",                     
             "TransactionDesc": data.get("description")[:20]       
         }
 
