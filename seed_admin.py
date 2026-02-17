@@ -7,7 +7,7 @@ with app.app_context():
         admin = User(
             username="admin",
             email="chrisshege35@gmail.com",
-            password_hash=generate_password_hash("chris")  # hashed, not plaintext
+            password_hash=generate_password_hash("christof")  # hashed, not plaintext
         )
         db.session.add(admin)
         db.session.commit()
