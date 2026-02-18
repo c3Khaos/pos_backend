@@ -37,3 +37,4 @@ urllib3==2.2.3
 virtualenv==20.29.1
 Werkzeug==3.0.6
 zipp==3.20.2
+psycopg2-binary
