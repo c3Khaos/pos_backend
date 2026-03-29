@@ -88,7 +88,7 @@ class Product(db.Model):
     price = db.Column(db.Float, nullable=False)
     unit_price = db.Column(db.Float , nullable = False)
     stock = db.Column(db.Integer, nullable=False)
-    image_url = db.Column(db.string(200), nullable=False)
+   
 
 
     def to_dict(self):
@@ -99,5 +99,4 @@ class Product(db.Model):
             "price": self.price,
             "unit_price": self.unit_price,
             "stock": self.stock,
-            "image_url": self.image_url,
        }
