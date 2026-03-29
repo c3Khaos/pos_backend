@@ -4,6 +4,7 @@ from flask_restful import Api
 from extensions import db, migrate,jwt
 from flask_cors import CORS
 from dotenv import load_dotenv
+import cloudinary
 
 
 
@@ -27,6 +28,11 @@ if not CORS_ORIGIN:
 app = Flask(__name__)
 app.config.from_object(Config)
 CORS(app,supports_credentials=True,origins=[CORS_ORIGIN])
+
+#cloudinary 
+cloudinary.cofig
+
+
 
 db.init_app(app)
 migrate.init_app(app, db)
