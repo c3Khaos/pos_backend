@@ -15,6 +15,7 @@ class ProductListResource(Resource):
         price = request.form.get("price")
         unit_price = request.form.get("unit_price")
         stock = request.form.get("stock")
+        barcode = request.form.get("barcode")
         
 
 
@@ -24,6 +25,7 @@ class ProductListResource(Resource):
             price = price,
             unit_price = unit_price,
             stock = stock,
+            barcode =barcode,
           
         )
 
