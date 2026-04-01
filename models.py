@@ -88,7 +88,7 @@ class Product(db.Model):
     price = db.Column(db.Float, nullable=False)
     unit_price = db.Column(db.Float , nullable = False)
     stock = db.Column(db.Integer, nullable=False)
-   
+    barcode = db.Column(db.String,nullable=True, unique=True, index=True)
 
 
     def to_dict(self):
@@ -99,4 +99,5 @@ class Product(db.Model):
             "price": self.price,
             "unit_price": self.unit_price,
             "stock": self.stock,
+            "barcode":self.barcode,
        }
