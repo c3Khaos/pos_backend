@@ -9,7 +9,7 @@ class UserListResource(Resource):
         users = User.query.all()
         return[user.to_dict() for user in users],200
     
-    @jwt_required
+    @jwt_required()
     def post(self):
         data = request.get_json()
 
