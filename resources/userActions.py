@@ -16,6 +16,7 @@ class UserListResource(Resource):
         username = data.get('username')
         password = data.get('password') 
         role = data.get('role', 'user')
+        active = data.get('active', True)
         email = data.get('email', f"{username}@gmail.com") 
 
         if not username or not password:
@@ -27,7 +28,8 @@ class UserListResource(Resource):
         new_user = User(
             username=username,
             email=email,
-            role=role
+            role=role,
+            active=active
         )
         new_user.set_password(password)
         

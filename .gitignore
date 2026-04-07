@@ -32,8 +32,6 @@ Thumbs.db
 # Log files
 *.log
 
-# Flask migration versions
-migrations/versions/
 
 # Node (if frontend present)
 node_modules/
