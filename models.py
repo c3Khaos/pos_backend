@@ -12,6 +12,7 @@ class User(db.Model):
     email = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(50), default='user', nullable=False)
+    active = db.Column(db.Boolean, default=True, nullable=False)
 
 
     sales = db.relationship("Sale", back_populates="seller")
@@ -23,7 +24,7 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self):
-        return {"id": self.id, "username": self.username,"email":self.email,"role":self.role}
+        return {"id": self.id, "username": self.username,"email":self.email,"role":self.role,"active":self.active}
     
 class Sale(db.Model):
     __tablename__ = "sales"

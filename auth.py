@@ -2,7 +2,6 @@ from flask import request
 from flask_restful import Resource
 from models import User
 from extensions import db
-# --- New JWT imports for token creation ---
 from flask_jwt_extended import create_access_token, create_refresh_token
 
 class LoginResource(Resource):
@@ -17,6 +16,8 @@ class LoginResource(Resource):
         user = User.query.filter_by(username=username).first()
 
         if user and user.check_password(password):
+            if not user.active:
+                return {"message":"Account deactivated. Contact Admin."},403
             #implement the jwt
             #"identy" is wht you get back after you verify the token ie user.id
             access_token = create_access_token(identity=user.id)

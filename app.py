@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 from config import Config
 from resources.products import ProductListResource
 from resources.sales import SaleListResource
+from resources.userActions import UserListResource, UserResource
 from auth import LoginResource, RegisterResource
-from resources.checkStatus import UsersExist 
 from resources.graphs import SalesTrend
 from resources.dashboardStatus import DashboardInfo
 from resources.payment import PaymentResource,PaymentCallbackResource,CheckPaymentStatusResource
@@ -44,8 +44,9 @@ with app.app_context():
     api.add_resource(ProductListResource,"/products")
     api.add_resource(SaleListResource, "/sales")
     api.add_resource(RegisterResource, "/register")
+    api.add_resource(UserListResource, '/users')
+    api.add_resource(UserResource, '/users/<int:user_id>')
     api.add_resource(LoginResource, "/login")
-    api.add_resource(UsersExist, "/users/exists")
     api.add_resource(PaymentResource, "/payments")
     api.add_resource(SalesTrend,"/salestrend")
     api.add_resource(DashboardInfo, '/dashboard-stats')
