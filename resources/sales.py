@@ -29,7 +29,7 @@ class SaleListResource(Resource):
         payment_method = data.get('payment_method', 'cash')
         sale_date_str = data.get('sale_date')
 
-        if not items_data or not isinstance(items_data,list) or not total_amount is not None or not amount_paid is not None:
+        if not items_data or not isinstance(items_data, list) or total_amount is None or amount_paid is None:
             return {"message":"Invalid sale data.Missing items or amounts."},400
         
         try:
@@ -67,7 +67,8 @@ class SaleListResource(Resource):
                 product = Product.query.get(product_id)
                 profit = (price_from_frontend - product.unit_price) * quantity
                 if product.stock < quantity:
-                    return {f"Not enough stock for {product.name}.Available stock :{product.stock}"},409
+                    db.session.rollback()
+                    return {"message": f"Not enough stock for {product.name}. Available: {product.stock}"}, 409
                 
                 product.stock -= quantity 
 
