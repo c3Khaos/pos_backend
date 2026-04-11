@@ -1,6 +1,7 @@
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask import request
 from flask_restful import Resource
-from models import Product
+from models import Product, User
 from extensions import db
 
 
@@ -9,7 +10,13 @@ class ProductListResource(Resource):
         products = Product.query.all()
         return [product.to_dict() for product in products], 200
     
+    @jwt_required()
     def post(self):
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user or user.role != "admin":
+            return{"Message":"Admin access required."},403
+
         name = request.form.get("name")
         category = request.form.get("category")
         price = request.form.get("price")
@@ -33,7 +40,13 @@ class ProductListResource(Resource):
         db.session.commit()
         return new_product.to_dict(),201
 class ProductResource(Resource):
+    @jwt_required()
     def patch(self, product_id):
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user or user.role != "admin":
+            return{"message":"Admin access required."},403
+        
         product = Product.query.get_or_404(product_id)
         data = request.get_json()
 
