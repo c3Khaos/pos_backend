@@ -32,3 +32,23 @@ class ProductListResource(Resource):
         db.session.add(new_product)
         db.session.commit()
         return new_product.to_dict(),201
+class ProductResource(Resource):
+    def patch(self, product_id):
+        product = Product.query.get_or_404(product_id)
+        data = request.get_json()
+
+        product.name = data.get("name", product.name)
+        product.category = data.get("category", product.category)
+        product.price = data.get("price", product.price)
+        product.unit_price = data.get("unit_price", product.unit_price)
+        product.stock = data.get("stock", product.stock)
+        product.barcode = data.get("barcode", product.barcode)
+
+        db.session.commit()
+        return product.to_dict(), 200
+
+    def delete(self, product_id):
+        product = Product.query.get_or_404(product_id)
+        db.session.delete(product)
+        db.session.commit()
+        return {"message": "Product deleted"}, 200

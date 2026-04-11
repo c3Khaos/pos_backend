@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 
 from config import Config
-from resources.products import ProductListResource
+from resources.products import ProductListResource,ProductResource
 from resources.sales import SaleListResource
 from resources.userActions import UserListResource, UserResource
 from auth import LoginResource, RegisterResource
@@ -42,6 +42,7 @@ with app.app_context():
 #import and register resources
     api = Api(app)
     api.add_resource(ProductListResource,"/products")
+    api.add_resource(ProductResource, '/products/<int:product_id>')
     api.add_resource(SaleListResource, "/sales")
     api.add_resource(RegisterResource, "/register")
     api.add_resource(UserListResource, '/users')
