@@ -24,6 +24,10 @@ class ProductListResource(Resource):
         stock = request.form.get("stock")
         barcode = request.form.get("barcode")
         
+        if barcode:
+            existing = Product.query.filter_by(barcode=barcode).first()
+            if existing:
+                return {"message": f"A product with barcode {barcode} already exists."}, 409
 
 
         new_product = Product(
