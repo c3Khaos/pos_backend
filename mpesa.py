@@ -2,17 +2,18 @@ import os
 import base64
 import requests
 import json
+import time
 from datetime import datetime
 from requests.auth import HTTPBasicAuth
 from dotenv import load_dotenv
 
-# Load environment variables from .env file 
 load_dotenv()
 
+# Module-level token cache — shared across all Mpesa instances
+_token_cache = {"token": None, "expires_at": 0}
 
 class Mpesa:
     def __init__(self):
-        #  Initialize class with credentials and config values
         self.consumer_key = os.environ.get("CONSUMER_KEY")
         self.consumer_secret = os.environ.get("CONSUMER_SECRET")
         self.business_short_code = os.environ.get("BUSINESS_SHORT_CODE")
@@ -21,106 +22,93 @@ class Mpesa:
         self.callback_url = os.environ.get("CALLBACK_URL")
 
     def get_access_token(self):
-        """Fetch OAuth access token from Safaricom API"""
+        now = time.time()
+        # Return cached token if still valid
+        if _token_cache["token"] and now < _token_cache["expires_at"]:
+            print("✅ Using cached token")
+            return _token_cache["token"]
+
         try:
             url = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
-            
-            res = requests.get(
-                url,
-                auth=HTTPBasicAuth(self.consumer_key, self.consumer_secret)
-            )
-            res.raise_for_status()  # Raise error if request fails
-
+            res = requests.get(url, auth=HTTPBasicAuth(self.consumer_key, self.consumer_secret))
+            res.raise_for_status()
             token = res.json().get("access_token")
-            print("🔑 Fresh Access Token:", token)  # Debugging
-
+            # Cache token for 58 minutes (expires in 60)
+            _token_cache["token"] = token
+            _token_cache["expires_at"] = now + 3480
+            print("🔑 Fresh Access Token fetched")
             return token
         except requests.exceptions.RequestException as e:
-            print("❌ Error fetching access token:", str(e))
+            print(f"❌ Error fetching access token: {e}")
             return None
-    
-    def generate_password(self):
-        """Generate Base64 encoded password for STK push"""
-        #  Build password string = BusinessShortCode + PassKey + Timestamp
-        password_str = str(self.business_short_code) + str(self.pass_key) + str(self.timestamp)
 
-        # Encode the string into Base64 as required by M-Pesa
+    def generate_password(self):
+        password_str = str(self.business_short_code) + str(self.pass_key) + str(self.timestamp)
         return base64.b64encode(password_str.encode()).decode("utf-8")
-    
+
     def make_stk_push(self, data):
-        """Initiate STK push request"""
-        # Get access token by calling get_access_token()
         token = self.get_access_token()
         if not token:
-            # If no token, return error immediately
             return {"error": "Failed to get access token."}
-        
-        # Make sure the amount is a valid integer
-        amount = int(data.get("amount", 0))
 
-        # Get the phone number from request data
+        amount = int(data.get("amount", 0))
         phone = str(data.get("phone", "")).strip()
 
-        #  Build the STK Push request payload
-        body = {    
-            "BusinessShortCode": int(self.business_short_code),   
-            "Password": self.generate_password(),        
-            "Timestamp": self.timestamp,                               
-            "TransactionType": "CustomerPayBillOnline",           
-            "Amount": amount,                                     
-            "PartyA": phone,                                      
-            "PartyB": int(self.business_short_code),              
+        body = {
+            "BusinessShortCode": int(self.business_short_code),
+            "Password": self.generate_password(),
+            "Timestamp": self.timestamp,
+            "TransactionType": "CustomerPayBillOnline",
+            "Amount": amount,
+            "PartyA": phone,
+            "PartyB": int(self.business_short_code),
             "PhoneNumber": phone,
-            "CallBackURL": self.callback_url,                     
-            "AccountReference": "Joycestores",                     
-            "TransactionDesc": data.get("description")[:20]       
+            "CallBackURL": self.callback_url,
+            "AccountReference": "Joycestores",
+            "TransactionDesc": data.get("description", "")[:20]
         }
 
-        # Print payload for debugging before sending
-        print("Sending STK push request with payload:", json.dumps(body, indent=4))
+        print("Sending STK push:", json.dumps(body, indent=4))
 
         try:
-            #Send POST request to Safaricom STK Push API with JSON body + token
             response = requests.post(
-               "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
-               json=body,
-               headers={
-                   "Content-Type": "application/json",
-                   "Authorization": f"Bearer {token}"
-               }
+                "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
+                json=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}"
+                }
             )
-            # Print raw response for debugging
             print("Raw API Response:", response.text)
-
-            # If Safaricom returned an error status code, raise exception
             response.raise_for_status()
-
-            # Return response as JSON if all is good
             return response.json()
         except requests.exceptions.RequestException as e:
-            # If request totally failed (network, auth, etc.), return error message
             return {"error": str(e)}
-        
 
-    def check_transaction(self,checkout_request_id):
-        """Checks whetehr an stk push was succesfull or not (status of the transaction)"""
+    def check_transaction(self, checkout_request_id):
+        token = self.get_access_token()
+        if not token:
+            return {"error": "Failed to get access token."}
+
         data = {
-            "BusinessShortCode":self.business_short_code,    
-            "Password": self.generate_password(),    
-            "Timestamp":self.timestamp,    
+            "BusinessShortCode": self.business_short_code,
+            "Password": self.generate_password(),
+            "Timestamp": self.timestamp,
             "CheckoutRequestID": checkout_request_id,
         }
 
-        token  = self.get_access_token()
-
-        response =  requests.post(
-            "https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query",
-            json=data,
-            headers={
-                "Content-Type":"application/json",
-                "Authorization":f"Bearer {token}"
-            }
-        )
-
-        return response.json()
-        
+        try:
+            response = requests.post(
+                "https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query",
+                json=data,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}"
+                }
+            )
+            if not response.text.strip():
+                return {"error": "Empty response from Safaricom"}
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"check_transaction error: {e}")
+            return {"error": str(e)}
