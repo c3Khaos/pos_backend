@@ -13,7 +13,7 @@ class Config:
      JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=60)
     
     # How long a "refresh" ID card is valid 
-     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+     JWT_REFRESH_TOKEN_EXPIRES = timedelta(hours=8)
 
      cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME')
      api_key    = os.environ.get('CLOUDINARY_API_KEY')
