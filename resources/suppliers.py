@@ -1,12 +1,15 @@
 from flask import request
 from flask_restful import Resource
 from models import Supplier
-from extensions import db
+from extensions import db,User
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 
 def admin_required():
-    claims = get_jwt()
-    return claims.get("role") == "admin"
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if user or user.role == "admin":
+            return True
+    return False
 
 class SupplierListResource(Resource):
     @jwt_required()
