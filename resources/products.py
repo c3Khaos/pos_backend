@@ -15,34 +15,43 @@ class ProductListResource(Resource):
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
         if not user or user.role != "admin":
-            return{"Message":"Admin access required."},403
+            return {"message": "Admin access required."}, 403
 
-        name = request.form.get("name")
-        category = request.form.get("category")
-        price = request.form.get("price")
-        unit_price = request.form.get("unit_price")
-        stock = request.form.get("stock")
-        barcode = request.form.get("barcode")
-        
+        name = request.form.get("name", "").strip()
+        category = request.form.get("category", "").strip()
+        barcode = request.form.get("barcode", "").strip()
+
+        # validate required text fields
+        if not name or not category:
+            return {"message": "Name and category are required."}, 400
+
+        # validate and sanitize numbers
+        try:
+            price = float(request.form.get("price"))
+            unit_price = float(request.form.get("unit_price"))
+            stock = int(request.form.get("stock"))
+            if price <= 0 or unit_price <= 0 or stock < 0:
+                return {"message": "Price and unit price must be positive. Stock cannot be negative."}, 400
+        except (TypeError, ValueError):
+            return {"message": "Price, unit price and stock must be valid numbers."}, 400
+
         if barcode:
             existing = Product.query.filter_by(barcode=barcode).first()
             if existing:
                 return {"message": f"A product with barcode {barcode} already exists."}, 409
 
-
         new_product = Product(
-            name = name,
-            category =category,
-            price = price,
-            unit_price = unit_price,
-            stock = stock,
-            barcode =barcode,
-          
+            name=name,
+            category=category,
+            price=price,
+            unit_price=unit_price,
+            stock=stock,
+            barcode=barcode or None,
         )
-
         db.session.add(new_product)
         db.session.commit()
-        return new_product.to_dict(),201
+        return new_product.to_dict(), 201
+    
 class ProductResource(Resource):
     @jwt_required()
     def patch(self, product_id):

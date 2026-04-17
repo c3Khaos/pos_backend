@@ -7,7 +7,9 @@ class Config:
      #app secret
      SECRET_KEY = os.getenv('SECRET_KEY','dev')
       # JWT configurations
-     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY','another_super_secret_jwt_key') 
+     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY') 
+     if not JWT_SECRET_KEY:
+          raise RecursionError("JWT_SECRET_KEY is not set")
     
     # How long the main "access" ID card is valid 
      JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=8)
