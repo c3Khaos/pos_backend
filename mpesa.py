@@ -21,6 +21,9 @@ class Mpesa:
         self.timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         self.callback_url = os.environ.get("CALLBACK_URL")
 
+        mpesa_env = os.environ.get("MPESA_ENV", "sandbox")
+        self.base_url = "https://api.safaricom.co.ke" if mpesa_env == "production" else "https://sandbox.safaricom.co.ke"
+
     def get_access_token(self):
         now = time.time()
         # Return cached token if still valid
@@ -29,7 +32,7 @@ class Mpesa:
             return _token_cache["token"]
 
         try:
-            url = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
+            url = f"{self.base_url}/oauth/v1/generate?grant_type=client_credentials"
             res = requests.get(url, auth=HTTPBasicAuth(self.consumer_key, self.consumer_secret))
             res.raise_for_status()
             token = res.json().get("access_token")
@@ -72,7 +75,7 @@ class Mpesa:
 
         try:
             response = requests.post(
-                "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
+                f"{self.base_url}/mpesa/stkpush/v1/processrequest",
                 json=body,
                 headers={
                     "Content-Type": "application/json",
@@ -99,7 +102,7 @@ class Mpesa:
 
         try:
             response = requests.post(
-                "https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query",
+                f"{self.base_url}/mpesa/stkpushquery/v1/query",
                 json=data,
                 headers={
                     "Content-Type": "application/json",
