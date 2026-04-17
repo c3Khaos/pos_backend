@@ -31,7 +31,7 @@ class Sale(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    transaction_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    transaction_id = db.Column(db.String(100), unique=True, nullable=True, index=True)
 
     total_amount = db.Column(db.Float, nullable=False)
     amount_paid = db.Column(db.Float, nullable=False)
