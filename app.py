@@ -17,6 +17,7 @@ from resources.graphs import SalesTrend
 from resources.dashboardStatus import DashboardInfo
 from resources.payment import PaymentResource,PaymentCallbackResource,CheckPaymentStatusResource
 from resources.suppliers import SupplierListResource, SupplierResource
+from resources.expenses import ExpenseListResource, ExpenseResource
 
 # Load environment variables (your secret keys!)
 load_dotenv()
@@ -55,7 +56,10 @@ with app.app_context():
     api.add_resource(PaymentCallbackResource, "/payments/callback")
     api.add_resource(CheckPaymentStatusResource,"/payments/check/<string:checkout_request_id>")
     api.add_resource(SupplierListResource, '/suppliers')
-api.add_resource(SupplierResource, '/suppliers/<int:supplier_id>')
+    api.add_resource(SupplierResource, '/suppliers/<int:supplier_id>')
+    api.add_resource(ExpenseListResource, '/expenses')
+    api.add_resource(ExpenseResource, '/expenses/<int:expense_id>')
+
 
 @app.route("/")
 def index():
