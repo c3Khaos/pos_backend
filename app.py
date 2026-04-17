@@ -65,12 +65,6 @@ with app.app_context():
 def index():
     return{"Message":"Welcome to POS backend APi"},200
 
-@app.route("/run-migrations")
-def run_migrations():
-    from flask_migrate import stamp, upgrade
-    stamp(revision='a7ed9b92320e')
-    upgrade()
-    return {"message": "Done"}, 200
 
 @app.route("/run-migrations")
 def run_migrations():
