@@ -10,10 +10,10 @@ class Config:
      JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY','another_super_secret_jwt_key') 
     
     # How long the main "access" ID card is valid 
-     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=60)
+     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=8)
     
     # How long a "refresh" ID card is valid 
-     JWT_REFRESH_TOKEN_EXPIRES = timedelta(hours=8)
+     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
 
      cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME')
      api_key    = os.environ.get('CLOUDINARY_API_KEY')
