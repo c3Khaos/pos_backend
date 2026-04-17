@@ -4,7 +4,7 @@ from models import User
 from extensions import db,limiter
 from flask_jwt_extended import create_access_token, create_refresh_token
 
-@limiter.limit("5 per minute")
+
 class LoginResource(Resource):
     @limiter.limit("5 per minute")
     def post(self):
