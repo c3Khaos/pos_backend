@@ -1,10 +1,12 @@
 from flask import request
 from flask_restful import Resource
 from models import User
-from extensions import db
+from extensions import db,limiter
 from flask_jwt_extended import create_access_token, create_refresh_token
 
+@limiter.limit("5 per minute")
 class LoginResource(Resource):
+    @limiter.limit("5 per minute")
     def post(self):
         data = request.get_json()
         username = data.get("username")
