@@ -72,5 +72,15 @@ def run_migrations():
     upgrade()
     return {"message": "Done"}, 200
 
+@app.route("/run-migrations")
+def run_migrations():
+    try:
+        from flask_migrate import stamp, upgrade
+        stamp(revision='a7ed9b92320e')
+        upgrade()
+        return {"message": "Done"}, 200
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 if __name__=="__main__":
     app.run(host="localhost",debug=True,port = 5555)
