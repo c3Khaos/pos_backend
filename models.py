@@ -31,6 +31,8 @@ class Sale(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
+    transaction_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
+
     total_amount = db.Column(db.Float, nullable=False)
     amount_paid = db.Column(db.Float, nullable=False)
     change_given = db.Column(db.Float, nullable=False)
@@ -119,5 +121,27 @@ class Supplier(db.Model):
             "phone": self.phone,
             "email": self.email,
             "address": self.address,
+            "created_at": self.created_at.isoformat()
+        }
+    
+class Expense(db.Model):
+    __tablename__ = 'expenses'
+
+    id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.String(200), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    category = db.Column(db.String(80), nullable=False)  # rent, electricity, staff, etc
+    expense_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "description": self.description,
+            "amount": self.amount,
+            "category": self.category,
+            "expense_date": self.expense_date.isoformat(),
+            "recorded_by": self.recorded_by,
             "created_at": self.created_at.isoformat()
         }
