@@ -75,9 +75,22 @@ def run_migrations():
 @app.route("/run-migrations")
 def run_migrations():
     try:
-        from flask_migrate import stamp, upgrade
-        stamp(revision='a7ed9b92320e')
-        upgrade()
+        with db.engine.connect() as conn:
+            conn.execute(db.text("""
+                CREATE TABLE IF NOT EXISTS expenses (
+                    id SERIAL PRIMARY KEY,
+                    description VARCHAR(200) NOT NULL,
+                    amount FLOAT NOT NULL,
+                    category VARCHAR(80) NOT NULL,
+                    expense_date TIMESTAMP NOT NULL,
+                    recorded_by INTEGER REFERENCES users(id),
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """))
+            conn.execute(db.text("""
+                UPDATE alembic_version SET version_num = '04f3b64dc3e3';
+            """))
+            conn.commit()
         return {"message": "Done"}, 200
     except Exception as e:
         return {"error": str(e)}, 500
