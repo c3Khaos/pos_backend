@@ -66,7 +66,7 @@ class SaleItem(db.Model):
     sale_id = db.Column(db.Integer, db.ForeignKey('sales.id'), nullable=False) 
     product_id = db.Column(db.Integer, nullable=False) 
     name = db.Column(db.String(120), nullable=False) 
-    quantity = db.Column(db.Integer, nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
     price = db.Column(db.Float, nullable=False) 
     profit = db.Column(db.Float,nullable=False)
 
