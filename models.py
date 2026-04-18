@@ -145,3 +145,31 @@ class Expense(db.Model):
             "recorded_by": self.recorded_by,
             "created_at": self.created_at.isoformat()
         }
+    
+class MpesaTransaction(db.Model):
+    __tablename__ = 'mpesa_transactions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    merchant_request_id = db.Column(db.String(100), nullable=True)
+    checkout_request_id = db.Column(db.String(100), nullable=True, index=True)
+    result_code = db.Column(db.Integer, nullable=True)
+    result_desc = db.Column(db.String(255), nullable=True)
+    amount = db.Column(db.Float, nullable=True)
+    mpesa_receipt_number = db.Column(db.String(100), nullable=True)
+    phone_number = db.Column(db.String(20), nullable=True)
+    transaction_date = db.Column(db.String(50), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "checkout_request_id": self.checkout_request_id,
+            "result_code": self.result_code,
+            "result_desc": self.result_desc,
+            "amount": self.amount,
+            "mpesa_receipt_number": self.mpesa_receipt_number,
+            "phone_number": self.phone_number,
+            "transaction_date": self.transaction_date,
+            "created_at": self.created_at.isoformat(),
+            "status": "success" if self.result_code == 0 else "failed"
+        }

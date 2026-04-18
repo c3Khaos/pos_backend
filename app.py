@@ -15,7 +15,7 @@ from resources.userActions import UserListResource, UserResource
 from auth import LoginResource, RegisterResource
 from resources.graphs import SalesTrend
 from resources.dashboardStatus import DashboardInfo
-from resources.payment import PaymentResource,PaymentCallbackResource,CheckPaymentStatusResource
+from resources.payment import PaymentResource, PaymentCallbackResource, CheckPaymentStatusResource, MpesaTransactionListResource
 from resources.suppliers import SupplierListResource, SupplierResource
 from resources.expenses import ExpenseListResource, ExpenseResource
 
@@ -55,6 +55,7 @@ with app.app_context():
     api.add_resource(SalesTrend,"/salestrend")
     api.add_resource(DashboardInfo, '/dashboard-stats')
     api.add_resource(PaymentCallbackResource, "/payments/callback")
+    api.add_resource(MpesaTransactionListResource, '/mpesa-transactions')
     api.add_resource(CheckPaymentStatusResource,"/payments/check/<string:checkout_request_id>")
     api.add_resource(SupplierListResource, '/suppliers')
     api.add_resource(SupplierResource, '/suppliers/<int:supplier_id>')
