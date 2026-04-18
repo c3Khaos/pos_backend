@@ -20,6 +20,7 @@ class ProductListResource(Resource):
         name = request.form.get("name", "").strip()
         category = request.form.get("category", "").strip()
         barcode = request.form.get("barcode", "").strip()
+        sold_loose = request.form.get("sold_loose", "false").lower() == "true"
 
         # validate required text fields
         if not name or not category:
@@ -47,6 +48,7 @@ class ProductListResource(Resource):
             unit_price=unit_price,
             stock=stock,
             barcode=barcode or None,
+            sold_loose=sold_loose
         )
         db.session.add(new_product)
         db.session.commit()
@@ -69,11 +71,20 @@ class ProductResource(Resource):
         product.unit_price = data.get("unit_price", product.unit_price)
         product.stock = data.get("stock", product.stock)
         product.barcode = data.get("barcode", product.barcode)
+        if "sold_loose" in data:
+            product.sold_loose = data.get("sold_loose")
 
         db.session.commit()
         return product.to_dict(), 200
 
     def delete(self, product_id):
+        @jwt_required()
+        def delete(self, product_id):
+            user_id = get_jwt_identity()
+            user = User.query.get(user_id)
+            if not user or user.role != "admin":
+                return {"message": "Admin access required."}, 403
+
         product = Product.query.get_or_404(product_id)
         db.session.delete(product)
         db.session.commit()
