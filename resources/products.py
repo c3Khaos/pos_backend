@@ -77,14 +77,13 @@ class ProductResource(Resource):
         db.session.commit()
         return product.to_dict(), 200
 
+    @jwt_required()
     def delete(self, product_id):
-        @jwt_required()
-        def delete(self, product_id):
-            user_id = get_jwt_identity()
-            user = User.query.get(user_id)
-            if not user or user.role != "admin":
-                return {"message": "Admin access required."}, 403
-
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user or user.role != "admin":
+            return {"message": "Admin access required."}, 403
+        
         product = Product.query.get_or_404(product_id)
         db.session.delete(product)
         db.session.commit()
