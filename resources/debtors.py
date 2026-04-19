@@ -1,22 +1,25 @@
-# resources/debtors.py
 from flask import request
 from flask_restful import Resource
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import Sale, DebtPayment
+from models import Sale, DebtPayment, User
 from extensions import db
 
 
 class DebtorListResource(Resource):
-    """GET /debtors — list all sales that are unpaid or partially paid"""
+    """GET /debtors — list unpaid/partial sales (admin only)"""
 
     @jwt_required()
     def get(self):
-        status = request.args.get('status')  # optional filter: unpaid, partial, paid
+        user_id = get_jwt_identity()
+        user    = User.query.get(user_id)
+        if not user or user.role != "admin":
+            return {"message": "Admin access required."}, 403
+
+        status = request.args.get('status')
 
         if status:
             query = Sale.query.filter(Sale.payment_status == status)
         else:
-            # default: only show debts (unpaid or partial)
             query = Sale.query.filter(Sale.payment_status.in_(['unpaid', 'partial']))
 
         debtors = query.order_by(Sale.sale_date.desc()).all()
@@ -32,10 +35,15 @@ class DebtorListResource(Resource):
 
 
 class DebtorDetailResource(Resource):
-    """GET /debtors/<sale_id> — get one debt with full payment history"""
+    """GET /debtors/<sale_id> — one debt with full payment history (admin only)"""
 
     @jwt_required()
     def get(self, sale_id):
+        user_id = get_jwt_identity()
+        user    = User.query.get(user_id)
+        if not user or user.role != "admin":
+            return {"message": "Admin access required."}, 403
+
         sale     = Sale.query.get_or_404(sale_id)
         payments = DebtPayment.query.filter_by(sale_id=sale_id).order_by(DebtPayment.paid_at.desc()).all()
 
@@ -51,13 +59,17 @@ class DebtorDetailResource(Resource):
 
 
 class DebtorPaymentResource(Resource):
-    """POST /debtors/<sale_id>/pay — record a payment on a debt"""
+    """POST /debtors/<sale_id>/pay — record a payment (admin only)"""
 
     @jwt_required()
     def post(self, sale_id):
-        sale    = Sale.query.get_or_404(sale_id)
-        data    = request.get_json()
         user_id = get_jwt_identity()
+        user    = User.query.get(user_id)
+        if not user or user.role != "admin":
+            return {"message": "Admin access required."}, 403
+
+        sale = Sale.query.get_or_404(sale_id)
+        data = request.get_json()
 
         amount = data.get('amount')
         method = data.get('method', 'cash')
