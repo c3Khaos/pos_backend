@@ -24,27 +24,42 @@ class SaleListResource(Resource):
         data = request.get_json()
 
         transaction_id = data.get('transaction_id')
-        items_data = data.get('items')
-        total_amount = data.get('total_amount')
-        amount_paid = data.get('amount_paid')
+        items_data     = data.get('items')
+        total_amount   = data.get('total_amount')
+        amount_paid    = data.get('amount_paid')
         payment_method = data.get('payment_method', 'cash')
-        sale_date_str = data.get('sale_date')
+        sale_date_str  = data.get('sale_date')
+
+        # 👇 NEW — credit sale fields
+        customer_name  = data.get('customer_name')
+        customer_phone = data.get('customer_phone')
 
         if not transaction_id:
             return {"message": "Missing transaction_id"}, 400
 
-        if not items_data or not isinstance(items_data, list) or total_amount is None or amount_paid is None:
+        if not items_data or not isinstance(items_data, list) or total_amount is None:
             return {"message": "Invalid sale data. Missing items or amounts."}, 400
+
+        # 👇 NEW — credit sale validation
+        if payment_method == 'credit':
+            if not customer_name or not customer_phone:
+                return {"message": "Customer name and phone are required for credit sales."}, 400
+            payment_status = 'unpaid'
+            amount_paid    = 0          # nothing paid yet
+            change_given   = 0
+        else:
+            if amount_paid is None:
+                return {"message": "Amount paid is required."}, 400
+            change_given   = amount_paid - total_amount
+            payment_status = 'paid'
+            if change_given < 0:
+                return {"message": "Amount paid is insufficient."}, 400
 
         try:
             # --- idempotency check ---
             existing_sale = Sale.query.filter_by(transaction_id=transaction_id).first()
             if existing_sale:
                 return existing_sale.to_dict(), 200
-
-            change_given = amount_paid - total_amount
-            if change_given < 0:
-                return {"message": "Amount paid is insufficient."}, 400
 
             sale_date = (
                 datetime.fromisoformat(sale_date_str.replace("Z", "+00:00"))
@@ -55,9 +70,9 @@ class SaleListResource(Resource):
 
             # --- validate products first ---
             for item_data in items_data:
-                product_id = item_data.get('product_id')
-                product_name = item_data.get('name')
-                quantity = item_data.get('quantity')
+                product_id         = item_data.get('product_id')
+                product_name       = item_data.get('name')
+                quantity           = item_data.get('quantity')
                 price_from_frontend = item_data.get('price')
 
                 if not product_id or not product_name or not quantity or price_from_frontend is None:
@@ -73,40 +88,44 @@ class SaleListResource(Resource):
                     }, 409
 
                 validated_items.append({
-                    "product": product,
+                    "product":  product,
                     "quantity": quantity,
-                    "price": price_from_frontend,
-                    "profit": (price_from_frontend - product.unit_price) * quantity
+                    "price":    price_from_frontend,
+                    "profit":   (price_from_frontend - product.unit_price) * quantity
                 })
 
             # --- create sale ---
             new_sale = Sale(
-                transaction_id=transaction_id,
-                total_amount=total_amount,
-                amount_paid=amount_paid,
-                change_given=change_given,
-                payment_method=payment_method,
-                sale_date=sale_date,
-                user_id=user_id,
+                transaction_id = transaction_id,
+                total_amount   = total_amount,
+                amount_paid    = amount_paid,
+                change_given   = change_given,
+                payment_method = payment_method,
+                sale_date      = sale_date,
+                user_id        = user_id,
+                # 👇 NEW
+                customer_name  = customer_name,
+                customer_phone = customer_phone,
+                payment_status = payment_status,
             )
 
             db.session.add(new_sale)
             db.session.flush()
 
-            # --- create sale items + update stock ---
+            # --- create sale items + update stock (even for credit) ---
             for item in validated_items:
-                product = item["product"]
+                product  = item["product"]
                 quantity = item["quantity"]
 
                 product.stock -= quantity
 
                 sale_item = SaleItem(
-                    sale_id=new_sale.id,
-                    product_id=product.id,
-                    name=product.name,
-                    quantity=quantity,
-                    price=item["price"],
-                    profit=item["profit"]
+                    sale_id    = new_sale.id,
+                    product_id = product.id,
+                    name       = product.name,
+                    quantity   = quantity,
+                    price      = item["price"],
+                    profit     = item["profit"]
                 )
 
                 db.session.add(sale_item)
@@ -117,12 +136,9 @@ class SaleListResource(Resource):
 
         except IntegrityError:
             db.session.rollback()
-
-            # handle duplicate transaction_id race condition
             existing_sale = Sale.query.filter_by(transaction_id=transaction_id).first()
             if existing_sale:
                 return existing_sale.to_dict(), 200
-
             return {"message": "Database integrity error"}, 500
 
         except ValueError as e:

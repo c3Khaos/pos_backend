@@ -1,4 +1,4 @@
-from app import db
+from extensions import db
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
@@ -49,7 +49,7 @@ class Sale(db.Model):
     def to_dict(self):
         change = self.amount_paid-self.total_amount
         return {
-            "id " : self.id,
+            "id" : self.id,
             "sale_number":f"SALE-{self.id}",
             "total_amount":self.total_amount,
             "amount_paid": self.amount_paid,

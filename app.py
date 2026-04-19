@@ -18,6 +18,7 @@ from resources.dashboardStatus import DashboardInfo
 from resources.payment import PaymentResource, PaymentCallbackResource, CheckPaymentStatusResource, MpesaTransactionListResource
 from resources.suppliers import SupplierListResource, SupplierResource
 from resources.expenses import ExpenseListResource, ExpenseResource
+from resources.debtors import DebtorListResource, DebtorDetailResource, DebtorPaymentResource
 
 # Load environment variables (your secret keys!)
 load_dotenv()
@@ -61,6 +62,9 @@ with app.app_context():
     api.add_resource(SupplierResource, '/suppliers/<int:supplier_id>')
     api.add_resource(ExpenseListResource, '/expenses')
     api.add_resource(ExpenseResource, '/expenses/<int:expense_id>')
+    api.add_resource(DebtorListResource,    "/debtors")
+    api.add_resource(DebtorDetailResource,  "/debtors/<int:sale_id>")
+    api.add_resource(DebtorPaymentResource, "/debtors/<int:sale_id>/pay")
 
 
 @app.route("/")
