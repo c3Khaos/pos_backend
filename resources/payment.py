@@ -31,24 +31,6 @@ class PaymentResource(Resource):
         except (TypeError, ValueError):
             return {"message": "Invalid amount format."}, 400
 
-        # ── NEW: verify the sale actually exists before charging ──────────────
-        # Prevents STK pushes for non-existent/tampered transaction IDs
-        sale = Sale.query.filter_by(transaction_id=transaction_id).first()
-        if not sale:
-            return {"message": "Sale not found. Please create sale first."}, 404
-
-        # ── NEW: verify amount matches the sale total ─────────────────────────
-        if abs(amount - sale.total_amount) > 0.01:
-            current_app.logger.warning(
-                f"Amount mismatch attempt: txn={transaction_id} "
-                f"expected={sale.total_amount} got={amount}"
-            )
-            return {"message": "Amount does not match sale total."}, 400
-
-        # ── NEW: block double STK for already-paid sales ──────────────────────
-        if sale.payment_status == 'paid':
-            return {"message": "This sale is already paid."}, 400
-
         try:
             result = KopoKopoService.initiate_stk_push(
                 phone_number   = phone_number,
