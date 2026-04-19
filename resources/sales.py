@@ -2,7 +2,7 @@ from flask import request
 from flask_restful import Resource
 from models import Sale, SaleItem, Product
 from extensions import db
-from datetime import datetime
+from datetime import datetime, timezone
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 
@@ -30,7 +30,7 @@ class SaleListResource(Resource):
         payment_method = data.get('payment_method', 'cash')
         sale_date_str  = data.get('sale_date')
 
-        # 👇 NEW — credit sale fields
+        # credit sale fields
         customer_name  = data.get('customer_name')
         customer_phone = data.get('customer_phone')
 
@@ -40,7 +40,7 @@ class SaleListResource(Resource):
         if not items_data or not isinstance(items_data, list) or total_amount is None:
             return {"message": "Invalid sale data. Missing items or amounts."}, 400
 
-        # 👇 NEW — credit sale validation
+        # credit sale validation
         if payment_method == 'credit':
             if not customer_name or not customer_phone:
                 return {"message": "Customer name and phone are required for credit sales."}, 400
@@ -63,7 +63,8 @@ class SaleListResource(Resource):
 
             sale_date = (
                 datetime.fromisoformat(sale_date_str.replace("Z", "+00:00"))
-                if sale_date_str else datetime.utcnow()
+                if sale_date_str
+                else datetime.now(timezone.utc)
             )
 
             validated_items = []
@@ -103,7 +104,7 @@ class SaleListResource(Resource):
                 payment_method = payment_method,
                 sale_date      = sale_date,
                 user_id        = user_id,
-                # 👇 NEW
+                
                 customer_name  = customer_name,
                 customer_phone = customer_phone,
                 payment_status = payment_status,
