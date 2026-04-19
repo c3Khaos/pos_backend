@@ -22,7 +22,7 @@ class Mpesa:
         self.callback_url = os.environ.get("CALLBACK_URL")
 
         mpesa_env = os.environ.get("MPESA_ENV", "sandbox")
-        self.base_url = "https://api.safaricom.co.ke" if mpesa_env == "production" else "https://sandbox.safaricom.co.ke"
+        self.base_url = "https://api.kopokopo.co.ke" if mpesa_env == "production" else "https://sandbox.kopokopo.co.ke"
 
     def get_access_token(self):
         now = time.time()

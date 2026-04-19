@@ -38,11 +38,13 @@ class Sale(db.Model):
     change_given = db.Column(db.Float, nullable=False)
     payment_method = db.Column(db.String(50), nullable=False)
     sale_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     seller = db.relationship("User", back_populates="sales")
-
     items = db.relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan")
+
+    customer_name  = db.Column(db.String(100), nullable=True)
+    customer_phone = db.Column(db.String(20),  nullable=True)
+    payment_status = db.Column(db.String(20),  default='paid')
 
     def to_dict(self):
         change = self.amount_paid-self.total_amount
@@ -55,6 +57,9 @@ class Sale(db.Model):
             "payment_method":self.payment_method,
             "sale_date":self.sale_date.isoformat(),
             "user":self.seller.username if self.seller else None,
+            "customer_name":  self.customer_name,
+            "customer_phone": self.customer_phone,
+            "payment_status": self.payment_status,
             "items": [item.to_dict() for item in self.items]
 
         }
@@ -174,4 +179,24 @@ class MpesaTransaction(db.Model):
             "transaction_date": self.transaction_date,
             "created_at": self.created_at.isoformat(),
             "status": "success" if self.result_code == 0 else "failed"
+        }
+
+class DebtPayment(db.Model):
+    __tablename__ = 'debt_payments'
+
+    id          = db.Column(db.Integer, primary_key=True)
+    sale_id     = db.Column(db.Integer, db.ForeignKey('sales.id'), nullable=False)
+    amount      = db.Column(db.Float, nullable=False)
+    method      = db.Column(db.String(20))  # cash, mpesa, card
+    paid_at     = db.Column(db.DateTime, default=db.func.now())
+    received_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id":          self.id,
+            "sale_id":     self.sale_id,
+            "amount":      self.amount,
+            "method":      self.method,
+            "paid_at":     self.paid_at.isoformat() if self.paid_at else None,
+            "received_by": self.received_by,
         }
