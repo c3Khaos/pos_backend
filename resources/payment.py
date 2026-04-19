@@ -149,9 +149,9 @@ class CheckPaymentStatusResource(Resource):
     """GET /payments/check/<payment_id> — frontend polls this"""
 
     @jwt_required()
-    def get(self, payment_id):   # ✅ consistent name matching app.py
+    def get(self, checkout_payment_id):   # ✅ consistent name matching app.py
         try:
-            result = KopoKopoService.check_payment_status(payment_id)
+            result = KopoKopoService.check_payment_status(checkout_payment_id)
             return result, 200
         except Exception as e:
             current_app.logger.error(f"Payment status check error: {e}")
