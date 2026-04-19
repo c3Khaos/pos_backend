@@ -20,3 +20,11 @@ class Config:
      cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME')
      api_key    = os.environ.get('CLOUDINARY_API_KEY')
      api_secret = os.environ.get('CLOUDINARY_API_SECRET')
+
+         # Kopo Kopo
+     KOPOKOPO_CLIENT_ID     = os.environ.get('KOPOKOPO_CLIENT_ID')
+     KOPOKOPO_CLIENT_SECRET = os.environ.get('KOPOKOPO_CLIENT_SECRET')
+     KOPOKOPO_TILL_NUMBER   = os.environ.get('KOPOKOPO_TILL_NUMBER')
+     KOPOKOPO_API_KEY       = os.environ.get('KOPOKOPO_API_KEY')
+     KOPOKOPO_CALLBACK_URL  = os.environ.get('KOPOKOPO_CALLBACK_URL')
+     KOPOKOPO_ENV           = os.environ.get('KOPOKOPO_ENV', 'sandbox')

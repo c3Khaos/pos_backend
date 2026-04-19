@@ -57,7 +57,7 @@ with app.app_context():
     api.add_resource(DashboardInfo, '/dashboard-stats')
     api.add_resource(PaymentCallbackResource, "/payments/callback")
     api.add_resource(MpesaTransactionListResource, '/mpesa-transactions')
-    api.add_resource(CheckPaymentStatusResource,"/payments/check/<string:checkout_request_id>")
+    api.add_resource(CheckPaymentStatusResource,"/payments/check/<string:checkout_payment_id>")
     api.add_resource(SupplierListResource, '/suppliers')
     api.add_resource(SupplierResource, '/suppliers/<int:supplier_id>')
     api.add_resource(ExpenseListResource, '/expenses')
