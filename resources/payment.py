@@ -289,6 +289,13 @@ class PaymentVerifyResource(Resource):
     """
     GET /payments/verify/<transaction_id>
     Checks if payment arrived for this transaction by ANY method.
+
+    FLOW:
+    1. Sale already marked paid → return immediately
+    2. Check if this transaction already claimed a payment → return it
+    3. Look for unclaimed recent payments (linked_transaction_id IS NULL)
+    4. Sale exists → match by amount → claim → mark sale paid
+    5. No sale yet → claim the payment → frontend creates the sale
     """
 
     @jwt_required()
@@ -300,44 +307,71 @@ class PaymentVerifyResource(Resource):
         if sale and sale.payment_status == 'paid':
             return {"paid": True, "status": "paid"}, 200
 
-        # ── 2. Look for a recent successful payment ───────────────────────────
+        # ── 2. Check if this transaction already claimed a payment ────────────
+        already_claimed = MpesaTransaction.query.filter_by(
+            linked_transaction_id=transaction_id,
+            result_code=0
+        ).first()
+        if already_claimed:
+            return {
+                "paid":      True,
+                "status":    "paid" if (sale and sale.payment_status == 'paid') else "payment_received",
+                "reference": already_claimed.mpesa_receipt_number,
+                "amount":    already_claimed.amount,
+                "name":      already_claimed.sender_full_name,
+            }, 200
+
+        # ── 3. Look for UNCLAIMED recent successful payments ──────────────────
         ten_mins_ago = datetime.utcnow() - timedelta(minutes=10)
         recent_payments = MpesaTransaction.query.filter(
-            MpesaTransaction.result_code == 0,
-            MpesaTransaction.created_at  >= ten_mins_ago,
+            MpesaTransaction.result_code          == 0,
+            MpesaTransaction.created_at           >= ten_mins_ago,
+            MpesaTransaction.linked_transaction_id == None,
         ).order_by(MpesaTransaction.created_at.desc()).all()
 
         if not recent_payments:
             return {"paid": False, "status": "pending"}, 200
 
-        # ── 3. Sale exists — try to match by amount ───────────────────────────
+        # ── 4. Sale exists — match by amount, then claim ──────────────────────
         if sale:
             matching = next(
                 (p for p in recent_payments if p.amount == sale.total_amount),
                 None
             )
             if matching:
-                sale.payment_status = 'paid'
-                sale.amount_paid    = sale.total_amount
-                db.session.commit()
+                try:
+                    matching.linked_transaction_id = transaction_id
+                    sale.payment_status            = 'paid'
+                    sale.amount_paid               = sale.total_amount
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    current_app.logger.error(f"Failed to claim payment: {e}")
+                    return {"paid": False, "status": "pending"}, 200
+
                 return {
                     "paid":      True,
                     "status":    "paid_manually",
                     "reference": matching.mpesa_receipt_number,
-                    # FIX: sender_full_name is a @property — no parentheses
                     "name":      matching.sender_full_name,
                 }, 200
 
-            # Sale exists but no amount match yet
             return {"paid": False, "status": "pending"}, 200
 
-        # ── 4. No sale yet — payment arrived, frontend will create the sale ───
+        # ── 5. No sale yet — claim the latest payment ─────────────────────────
         latest = recent_payments[0]
+        try:
+            latest.linked_transaction_id = transaction_id
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to claim payment: {e}")
+            return {"paid": False, "status": "pending"}, 200
+
         return {
             "paid":      True,
             "status":    "payment_received",
             "reference": latest.mpesa_receipt_number,
             "amount":    latest.amount,
-            # FIX: sender_full_name is a @property — no parentheses
             "name":      latest.sender_full_name,
         }, 200

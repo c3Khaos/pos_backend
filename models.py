@@ -174,33 +174,35 @@ class MpesaTransaction(db.Model):
     sender_first_name    = db.Column(db.String(100), nullable=True)
     sender_middle_name   = db.Column(db.String(100), nullable=True)
     sender_last_name     = db.Column(db.String(100), nullable=True)
+    linked_transaction_id = db.Column(db.String(100), nullable=True, index=True)
 
-    # ── FIX: @property means no () needed anywhere — models, routes, everywhere
     @property
     def sender_full_name(self):
         parts = [self.sender_first_name, self.sender_middle_name, self.sender_last_name]
         return " ".join(p for p in parts if p) or "Unknown"
 
+    @property
+    def is_claimed(self):
+        return self.linked_transaction_id is not None
+
     def to_dict(self):
         return {
-            "id":                   self.id,
-            "checkout_request_id":  self.checkout_request_id,
-            "result_code":          self.result_code,
-            "result_desc":          self.result_desc,
-            "amount":               self.amount,
-            "mpesa_receipt_number": self.mpesa_receipt_number,
-            "phone_number":         self.phone_number,
-            "transaction_date":     self.transaction_date,
-            "created_at":           self.created_at.isoformat(),
-            "status":               "success" if self.result_code == 0 else "failed",
-            "sender_first_name":    self.sender_first_name,
-            "sender_middle_name":   self.sender_middle_name,
-            "sender_last_name":     self.sender_last_name,
-            # FIX: was self._full_name() — method didn't exist
-            # Now it's a @property, access like a plain attribute
-            "sender_full_name":     self.sender_full_name,
+            "id":                    self.id,
+            "checkout_request_id":   self.checkout_request_id,
+            "result_code":           self.result_code,
+            "result_desc":           self.result_desc,
+            "amount":                self.amount,
+            "mpesa_receipt_number":  self.mpesa_receipt_number,
+            "phone_number":          self.phone_number,
+            "transaction_date":      self.transaction_date,
+            "created_at":            self.created_at.isoformat(),
+            "status":                "success" if self.result_code == 0 else "failed",
+            "sender_first_name":     self.sender_first_name,
+            "sender_middle_name":    self.sender_middle_name,
+            "sender_last_name":      self.sender_last_name,
+            "sender_full_name":      self.sender_full_name,
+            "linked_transaction_id": self.linked_transaction_id,
         }
-
 
 class DebtPayment(db.Model):
     __tablename__ = 'debt_payments'
