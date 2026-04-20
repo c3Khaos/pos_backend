@@ -72,30 +72,6 @@ with app.app_context():
 def index():
     return{"Message":"Welcome to POS backend APi"},200
 
-# TEMPORARY — remove after running once!
-@app.route("/setup/register-webhooks")
-def register_webhooks_route():
-    from services.kopokopo import KopoKopoService
-    results = {}
-    
-    events = [
-        'buygoods_transaction_received',
-        'buygoods_transaction_reversed',
-    ]
-    
-    for event_type in events:
-        try:
-            success, response = KopoKopoService.subscribe_webhook(
-                event_type      = event_type,
-                scope           = 'till',
-                scope_reference = app.config['KOPOKOPO_TILL_NUMBER'],
-            )
-            results[event_type] = 'success' if success else f'failed: {response}'
-        except Exception as e:
-            results[event_type] = f'error: {str(e)}'
-    
-    return results, 200
-
 
 if __name__=="__main__":
     app.run(host="localhost",debug=True,port = 5555)
