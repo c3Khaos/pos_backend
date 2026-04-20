@@ -56,8 +56,6 @@ class PaymentCallbackResource(Resource):
             return {"message": "Invalid signature"}, 401
 
         data       = request.get_json()
-
-        # 🔍 TEMPORARY DEBUG — remove after confirming names are returned
         current_app.logger.info(f"STK CALLBACK PAYLOAD: {data}")
 
         attributes = data.get('data', {}).get('attributes', {})
@@ -80,7 +78,7 @@ class PaymentCallbackResource(Resource):
                 checkout_request_id=kopokopo_id
             ).first()
             if existing:
-                current_app.logger.info(f"Duplicate callback — already processed")
+                current_app.logger.info("Duplicate callback — already processed")
                 return {"message": "Already processed"}, 200
 
         try:
@@ -132,26 +130,16 @@ class MpesaWebhookResource(Resource):
     """
 
     def post(self):
-        # ── VERIFY SIGNATURE ─────────────────────────────────────────────────
-       # signature = request.headers.get('X-KopoKopo-Signature', '')
-       # if not KopoKopoService.verify_webhook(request.get_data(), signature):
-        #    current_app.logger.warning("Invalid webhook signature")
-         #   return {"message": "Invalid signature"}, 401
-
         data = request.get_json()
-
-        # 🔍 TEMPORARY DEBUG — remove after confirming everything works
         current_app.logger.info(f"WEBHOOK RECEIVED: {data}")
 
-        # ── DETECT PAYLOAD TYPE ───────────────────────────────────────────────
         if 'topic' in data:
             return self._handle_buygoods(data)
         elif data.get('data', {}).get('type') == 'incoming_payment':
             return self._handle_stk_result(data)
         else:
-            current_app.logger.warning(f"Unknown webhook format received")
+            current_app.logger.warning("Unknown webhook format received")
             return {"message": "Unknown webhook type"}, 200
-
 
     def _handle_buygoods(self, data):
         """Handles ALL till payments — whether STK or manually initiated by customer"""
@@ -160,12 +148,10 @@ class MpesaWebhookResource(Resource):
         resource   = event.get('resource') or {}
         webhook_id = data.get('id')
 
-        # Log reversals separately
         if topic == 'buygoods_transaction_reversed':
             current_app.logger.info(f"Transaction reversed: {resource.get('reference')}")
             return {"message": "Reversal noted"}, 200
 
-        # Idempotency check
         if webhook_id:
             existing = MpesaTransaction.query.filter_by(
                 checkout_request_id=webhook_id
@@ -192,14 +178,12 @@ class MpesaWebhookResource(Resource):
                 f"Till payment logged: {resource.get('reference')} "
                 f"KSh {resource.get('amount')} from {resource.get('sender_phone_number')}"
             )
-
             return {"message": "Till transaction logged"}, 200
 
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Buygoods webhook error: {e}")
             return {"message": "Error logged"}, 200
-
 
     def _handle_stk_result(self, data):
         """Handles callbacks from STK push we initiated"""
@@ -218,7 +202,6 @@ class MpesaWebhookResource(Resource):
         middle_name    = resource.get('sender_middle_name')
         last_name      = resource.get('sender_last_name')
 
-        # Idempotency
         if kopokopo_id:
             existing = MpesaTransaction.query.filter_by(
                 checkout_request_id=kopokopo_id
@@ -294,29 +277,25 @@ class MpesaTransactionListResource(Resource):
             MpesaTransaction.created_at.desc()
         ).all()
         return [t.to_dict() for t in transactions], 200
-    
+
+
 class PaymentVerifyResource(Resource):
     """
     GET /payments/verify/<transaction_id>
-    Checks if payment arrived for this transaction by ANY method
+    Checks if payment arrived for this transaction by ANY method.
     """
 
     @jwt_required()
     def get(self, transaction_id):
         from datetime import datetime, timedelta
 
-        # First check if sale exists and is paid
+        # ── 1. Sale already marked paid ──────────────────────────────────────
         sale = Sale.query.filter_by(transaction_id=transaction_id).first()
         if sale and sale.payment_status == 'paid':
             return {"paid": True, "status": "paid"}, 200
 
-        # Check MpesaTransaction directly
-        # Look for successful payment in last 10 minutes
-        # We can't match by transaction_id (Kopo Kopo doesn't know it for manual payments)
-        # So we match by: success + recent + not already linked to another sale
+        # ── 2. Look for a recent successful payment ───────────────────────────
         ten_mins_ago = datetime.utcnow() - timedelta(minutes=10)
-
-        # Get recent successful payments
         recent_payments = MpesaTransaction.query.filter(
             MpesaTransaction.result_code == 0,
             MpesaTransaction.created_at  >= ten_mins_ago,
@@ -325,7 +304,7 @@ class PaymentVerifyResource(Resource):
         if not recent_payments:
             return {"paid": False, "status": "pending"}, 200
 
-        # If sale exists, match by amount
+        # ── 3. Sale exists — try to match by amount ───────────────────────────
         if sale:
             matching = next(
                 (p for p in recent_payments if p.amount == sale.total_amount),
@@ -339,19 +318,20 @@ class PaymentVerifyResource(Resource):
                     "paid":      True,
                     "status":    "paid_manually",
                     "reference": matching.mpesa_receipt_number,
+                    # FIX: sender_full_name is a @property — no parentheses
                     "name":      matching.sender_full_name,
                 }, 200
 
-        # No sale yet — just confirm payment arrived
-        # Frontend will create the sale after getting this response
-        if recent_payments:
-            latest = recent_payments[0]
-            return {
-                "paid":      True,
-                "status":    "payment_received",
-                "reference": latest.mpesa_receipt_number,
-                "amount":    latest.amount,
-                "name":      latest.sender_full_name,
-            }, 200
+            # Sale exists but no amount match yet
+            return {"paid": False, "status": "pending"}, 200
 
-        return {"paid": False, "status": "pending"}, 200
+        # ── 4. No sale yet — payment arrived, frontend will create the sale ───
+        latest = recent_payments[0]
+        return {
+            "paid":      True,
+            "status":    "payment_received",
+            "reference": latest.mpesa_receipt_number,
+            "amount":    latest.amount,
+            # FIX: sender_full_name is a @property — no parentheses
+            "name":      latest.sender_full_name,
+        }, 200
