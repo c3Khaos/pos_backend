@@ -131,10 +131,10 @@ class MpesaWebhookResource(Resource):
 
     def post(self):
         # ── VERIFY SIGNATURE ─────────────────────────────────────────────────
-        signature = request.headers.get('X-KopoKopo-Signature', '')
-        if not KopoKopoService.verify_webhook(request.get_data(), signature):
-            current_app.logger.warning("Invalid webhook signature")
-            return {"message": "Invalid signature"}, 401
+        # signature = request.headers.get('X-KopoKopo-Signature', '')
+        # if not KopoKopoService.verify_webhook(request.get_data(), signature):
+        #     current_app.logger.warning("Invalid webhook signature")
+        #     return {"message": "Invalid signature"}, 401
 
         data = request.get_json()
         current_app.logger.info(f"WEBHOOK RECEIVED: {data}")
@@ -148,7 +148,7 @@ class MpesaWebhookResource(Resource):
             return {"message": "Unknown webhook type"}, 200
 
     def _handle_buygoods(self, data):
-        """Handles ALL till payments — whether STK or manually initiated by customer"""
+        """Handles till payments — manually initiated by customer"""
         topic      = data.get('topic')
         event      = data.get('event', {})
         resource   = event.get('resource') or {}
@@ -257,7 +257,7 @@ class MpesaWebhookResource(Resource):
 
 
 class CheckPaymentStatusResource(Resource):
-    """GET /payments/check/<payment_id> — frontend polls this"""
+    """GET /payments/check/<payment_id> — frontend polls STK status"""
 
     @jwt_required()
     def get(self, payment_id):
@@ -283,95 +283,3 @@ class MpesaTransactionListResource(Resource):
             MpesaTransaction.created_at.desc()
         ).all()
         return [t.to_dict() for t in transactions], 200
-
-
-class PaymentVerifyResource(Resource):
-    """
-    GET /payments/verify/<transaction_id>
-    Checks if payment arrived for this transaction by ANY method.
-
-    FLOW:
-    1. Sale already marked paid → return immediately
-    2. Check if this transaction already claimed a payment → return it
-    3. Look for unclaimed recent payments (linked_transaction_id IS NULL)
-    4. Sale exists → match by amount → claim → mark sale paid
-    5. No sale yet → claim the payment → frontend creates the sale
-    """
-
-    @jwt_required()
-    def get(self, transaction_id):
-        from datetime import datetime, timedelta
-
-        # ── 1. Sale already marked paid ──────────────────────────────────────
-        sale = Sale.query.filter_by(transaction_id=transaction_id).first()
-        if sale and sale.payment_status == 'paid':
-            return {"paid": True, "status": "paid"}, 200
-
-        # ── 2. Check if this transaction already claimed a payment ────────────
-        already_claimed = MpesaTransaction.query.filter_by(
-            linked_transaction_id=transaction_id,
-            result_code=0
-        ).first()
-        if already_claimed:
-            return {
-                "paid":      True,
-                "status":    "paid" if (sale and sale.payment_status == 'paid') else "payment_received",
-                "reference": already_claimed.mpesa_receipt_number,
-                "amount":    already_claimed.amount,
-                "name":      already_claimed.sender_full_name,
-            }, 200
-
-        # ── 3. Look for UNCLAIMED recent successful payments ──────────────────
-        ten_mins_ago = datetime.utcnow() - timedelta(minutes=10)
-        recent_payments = MpesaTransaction.query.filter(
-            MpesaTransaction.result_code          == 0,
-            MpesaTransaction.created_at           >= ten_mins_ago,
-            MpesaTransaction.linked_transaction_id == None,
-        ).order_by(MpesaTransaction.created_at.desc()).all()
-
-        if not recent_payments:
-            return {"paid": False, "status": "pending"}, 200
-
-        # ── 4. Sale exists — match by amount, then claim ──────────────────────
-        if sale:
-            matching = next(
-                (p for p in recent_payments if p.amount == sale.total_amount),
-                None
-            )
-            if matching:
-                try:
-                    matching.linked_transaction_id = transaction_id
-                    sale.payment_status            = 'paid'
-                    sale.amount_paid               = sale.total_amount
-                    db.session.commit()
-                except Exception as e:
-                    db.session.rollback()
-                    current_app.logger.error(f"Failed to claim payment: {e}")
-                    return {"paid": False, "status": "pending"}, 200
-
-                return {
-                    "paid":      True,
-                    "status":    "paid_manually",
-                    "reference": matching.mpesa_receipt_number,
-                    "name":      matching.sender_full_name,
-                }, 200
-
-            return {"paid": False, "status": "pending"}, 200
-
-        # ── 5. No sale yet — claim the latest payment ─────────────────────────
-        latest = recent_payments[0]
-        try:
-            latest.linked_transaction_id = transaction_id
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Failed to claim payment: {e}")
-            return {"paid": False, "status": "pending"}, 200
-
-        return {
-            "paid":      True,
-            "status":    "payment_received",
-            "reference": latest.mpesa_receipt_number,
-            "amount":    latest.amount,
-            "name":      latest.sender_full_name,
-        }, 200

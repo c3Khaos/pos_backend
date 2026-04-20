@@ -1,78 +1,74 @@
 import os
 from flask import Flask
 from flask_restful import Api
-from extensions import db, migrate,jwt,limiter
+from extensions import db, migrate, jwt, limiter
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-
-
-
 from config import Config
-from resources.products import ProductListResource,ProductResource
+from resources.products import ProductListResource, ProductResource
 from resources.sales import SaleListResource
 from resources.userActions import UserListResource, UserResource
 from auth import LoginResource, RegisterResource
 from resources.graphs import SalesTrend
 from resources.dashboardStatus import DashboardInfo
-from resources.payment import PaymentResource, PaymentCallbackResource, CheckPaymentStatusResource,PaymentVerifyResource,MpesaWebhookResource , MpesaTransactionListResource
+from resources.payment import (
+    PaymentResource,
+    PaymentCallbackResource,
+    CheckPaymentStatusResource,
+    MpesaWebhookResource,
+    MpesaTransactionListResource,
+)
 from resources.suppliers import SupplierListResource, SupplierResource
 from resources.expenses import ExpenseListResource, ExpenseResource
 from resources.debtors import DebtorListResource, DebtorDetailResource, DebtorPaymentResource
 
-# Load environment variables (your secret keys!)
 load_dotenv()
 
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN")
 
 if not CORS_ORIGIN:
     raise RuntimeError("CORS_ORIGIN is not set")
+
 app = Flask(__name__)
 app.config.from_object(Config)
-CORS(app,supports_credentials=True,origins=[CORS_ORIGIN])
+CORS(app, supports_credentials=True, origins=[CORS_ORIGIN])
 
 limiter.init_app(app)
 
-#cloudinary 
-
-
-
-
 db.init_app(app)
 migrate.init_app(app, db)
-jwt.init_app(app) # Initialize JWT tool for ID cards
+jwt.init_app(app)
 
 with app.app_context():
-#import and register resources
     api = Api(app)
-    api.add_resource(ProductListResource,"/products")
-    api.add_resource(ProductResource, '/products/<int:product_id>')
-    api.add_resource(SaleListResource, "/sales")
-    api.add_resource(RegisterResource, "/register")
-    api.add_resource(UserListResource, '/users')
-    api.add_resource(UserResource, '/users/<int:user_id>')
-    api.add_resource(LoginResource, "/login")
-    api.add_resource(PaymentResource, "/payments")
-    api.add_resource(SalesTrend,"/salestrend")
-    api.add_resource(DashboardInfo, '/dashboard-stats')
-    api.add_resource(PaymentCallbackResource, "/payments/callback")
-    api.add_resource(MpesaTransactionListResource, '/mpesa-transactions')
-    api.add_resource(CheckPaymentStatusResource,"/payments/check/<string:checkout_payment_id>")
-    api.add_resource(PaymentVerifyResource, "/payments/verify/<string:transaction_id>")
-    api.add_resource(MpesaWebhookResource, "/payments/webhook")
-    api.add_resource(SupplierListResource, '/suppliers')
-    api.add_resource(SupplierResource, '/suppliers/<int:supplier_id>')
-    api.add_resource(ExpenseListResource, '/expenses')
-    api.add_resource(ExpenseResource, '/expenses/<int:expense_id>')
-    api.add_resource(DebtorListResource,    "/debtors")
-    api.add_resource(DebtorDetailResource,  "/debtors/<int:sale_id>")
-    api.add_resource(DebtorPaymentResource, "/debtors/<int:sale_id>/pay")
+    api.add_resource(ProductListResource,          "/products")
+    api.add_resource(ProductResource,              "/products/<int:product_id>")
+    api.add_resource(SaleListResource,             "/sales")
+    api.add_resource(RegisterResource,             "/register")
+    api.add_resource(UserListResource,             "/users")
+    api.add_resource(UserResource,                 "/users/<int:user_id>")
+    api.add_resource(LoginResource,                "/login")
+    api.add_resource(PaymentResource,              "/payments")
+    api.add_resource(PaymentCallbackResource,      "/payments/callback")
+    api.add_resource(CheckPaymentStatusResource,   "/payments/check/<string:checkout_payment_id>")
+    api.add_resource(MpesaWebhookResource,         "/payments/webhook")
+    api.add_resource(MpesaTransactionListResource, "/mpesa-transactions")
+    api.add_resource(SalesTrend,                   "/salestrend")
+    api.add_resource(DashboardInfo,                "/dashboard-stats")
+    api.add_resource(SupplierListResource,         "/suppliers")
+    api.add_resource(SupplierResource,             "/suppliers/<int:supplier_id>")
+    api.add_resource(ExpenseListResource,          "/expenses")
+    api.add_resource(ExpenseResource,              "/expenses/<int:expense_id>")
+    api.add_resource(DebtorListResource,           "/debtors")
+    api.add_resource(DebtorDetailResource,         "/debtors/<int:sale_id>")
+    api.add_resource(DebtorPaymentResource,        "/debtors/<int:sale_id>/pay")
 
 
 @app.route("/")
 def index():
-    return{"Message":"Welcome to POS backend APi"},200
+    return {"Message": "Welcome to POS backend API"}, 200
 
 
-if __name__=="__main__":
-    app.run(host="localhost",debug=True,port = 5555)
+if __name__ == "__main__":
+    app.run(host="localhost", debug=True, port=5555)
