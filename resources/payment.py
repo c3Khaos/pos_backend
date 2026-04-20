@@ -76,6 +76,10 @@ class PaymentCallbackResource(Resource):
         amount         = resource.get('amount')
         phone          = resource.get('sender_phone_number')
 
+        first_name  = resource.get('sender_first_name')
+        middle_name = resource.get('sender_middle_name')
+        last_name   = resource.get('sender_last_name')
+
         # ── STEP 2: IDEMPOTENCY CHECK ─────────────────────────────────────────
         # Kopo Kopo retries callbacks if they don't get 200 fast enough.
         # Without this check, we'd create duplicate transaction logs and
@@ -100,6 +104,10 @@ class PaymentCallbackResource(Resource):
                 amount               = float(amount) if amount else None,
                 mpesa_receipt_number = reference,
                 phone_number         = phone,
+
+                sender_first_name    = first_name,
+                sender_middle_name   = middle_name,
+                sender_last_name     = last_name,
             )
             db.session.add(mpesa_txn)
 

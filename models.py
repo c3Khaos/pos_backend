@@ -167,6 +167,10 @@ class MpesaTransaction(db.Model):
     transaction_date = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    sender_first_name    = db.Column(db.String(100), nullable=True)
+    sender_middle_name   = db.Column(db.String(100), nullable=True)
+    sender_last_name     = db.Column(db.String(100), nullable=True)
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -178,8 +182,16 @@ class MpesaTransaction(db.Model):
             "phone_number": self.phone_number,
             "transaction_date": self.transaction_date + "Z",
             "created_at": self.created_at.isoformat(),
-            "status": "success" if self.result_code == 0 else "failed"
+            "status": "success" if self.result_code == 0 else "failed",
+            "sender_first_name":  self.sender_first_name,
+            "sender_middle_name": self.sender_middle_name,
+            "sender_last_name":   self.sender_last_name,
+            "sender_full_name":   self._full_name(), 
         }
+    def _full_name(self):
+        """Combine name parts — useful for admin display"""
+        parts = [self.sender_first_name, self.sender_middle_name, self.sender_last_name]
+        return " ".join(p for p in parts if p) or None
 
 class DebtPayment(db.Model):
     __tablename__ = 'debt_payments'
