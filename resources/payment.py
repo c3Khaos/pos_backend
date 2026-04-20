@@ -23,7 +23,6 @@ class PaymentResource(Resource):
         if not phone_number or not amount or not transaction_id:
             return {"message": "phone_number, amount and transaction_id are required."}, 400
 
-        # ── NEW: validate amount is a positive number ─────────────────────────
         try:
             amount = float(amount)
             if amount <= 0:
@@ -51,7 +50,7 @@ class PaymentResource(Resource):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ENDPOINT 2 — PAYMENT CALLBACK (HARDENED!)
+# ENDPOINT 2 — PAYMENT CALLBACK
 # ─────────────────────────────────────────────────────────────────────────────
 class PaymentCallbackResource(Resource):
     """POST /payments/callback — receives result from Kopo Kopo"""
@@ -70,7 +69,7 @@ class PaymentCallbackResource(Resource):
         resource   = event.get('resource') or {}
         metadata   = attributes.get('metadata', {})
 
-        kopokopo_id    = data.get('data', {}).get('id')       # unique from Kopo Kopo
+        kopokopo_id    = data.get('data', {}).get('id')
         transaction_id = metadata.get('transaction_id')
         reference      = resource.get('reference')
         amount         = resource.get('amount')
@@ -81,9 +80,6 @@ class PaymentCallbackResource(Resource):
         last_name   = resource.get('sender_last_name')
 
         # ── STEP 2: IDEMPOTENCY CHECK ─────────────────────────────────────────
-        # Kopo Kopo retries callbacks if they don't get 200 fast enough.
-        # Without this check, we'd create duplicate transaction logs and
-        # potentially double-process business logic.
         if kopokopo_id:
             existing = MpesaTransaction.query.filter_by(
                 checkout_request_id=kopokopo_id
@@ -92,7 +88,6 @@ class PaymentCallbackResource(Resource):
                 current_app.logger.info(
                     f"Duplicate callback for {kopokopo_id} — already processed"
                 )
-                # Return 200 so Kopo Kopo stops retrying
                 return {"message": "Already processed"}, 200
 
         try:
@@ -104,7 +99,6 @@ class PaymentCallbackResource(Resource):
                 amount               = float(amount) if amount else None,
                 mpesa_receipt_number = reference,
                 phone_number         = phone,
-
                 sender_first_name    = first_name,
                 sender_middle_name   = middle_name,
                 sender_last_name     = last_name,
@@ -116,10 +110,12 @@ class PaymentCallbackResource(Resource):
                 sale = Sale.query.filter_by(transaction_id=transaction_id).first()
 
                 if not sale:
-                    # Orphan payment — customer paid but no sale exists
-                    # Still log it, alert admin
-                    current_app.logger.error(
-                        f"Orphan payment: txn_id={transaction_id} "
+                    # 👇 CHANGED — this is EXPECTED, not an error
+                    # In M-Pesa flow, callback often arrives before frontend creates sale.
+                    # Sale creation happens after frontend polls and sees Success.
+                    # The MpesaTransaction record is still logged above for audit.
+                    current_app.logger.info(
+                        f"Payment confirmed, awaiting sale sync: "
                         f"reference={reference} amount={amount}"
                     )
                 else:
@@ -131,10 +127,8 @@ class PaymentCallbackResource(Resource):
                             f"AMOUNT MISMATCH on sale {sale.id}: "
                             f"expected={sale.total_amount} received={paid_amount}"
                         )
-                        # Don't mark as paid — flag for admin review
                         sale.payment_status = 'amount_mismatch'
                     else:
-                        # ALL CHECKS PASSED — mark as paid
                         sale.payment_status = 'paid'
                         sale.amount_paid    = paid_amount
 
@@ -143,8 +137,6 @@ class PaymentCallbackResource(Resource):
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Callback processing error: {e}")
-            # Still return 200 so Kopo Kopo doesn't retry endlessly
-            # (we've logged the error for admin investigation)
             return {"message": "Callback received with errors"}, 200
 
         return {"message": "Callback received"}, 200
@@ -157,7 +149,7 @@ class CheckPaymentStatusResource(Resource):
     """GET /payments/check/<payment_id> — frontend polls this"""
 
     @jwt_required()
-    def get(self, checkout_payment_id):   # ✅ consistent name matching app.py
+    def get(self, checkout_payment_id):
         try:
             result = KopoKopoService.check_payment_status(checkout_payment_id)
             return result, 200

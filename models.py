@@ -180,7 +180,7 @@ class MpesaTransaction(db.Model):
             "amount": self.amount,
             "mpesa_receipt_number": self.mpesa_receipt_number,
             "phone_number": self.phone_number,
-            "transaction_date": self.transaction_date + "Z",
+            "transaction_date": self.transaction_date,
             "created_at": self.created_at.isoformat(),
             "status": "success" if self.result_code == 0 else "failed",
             "sender_first_name":  self.sender_first_name,
