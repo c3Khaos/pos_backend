@@ -188,8 +188,7 @@ class MpesaTransaction(db.Model):
             "sender_last_name":   self.sender_last_name,
             "sender_full_name":   self._full_name(), 
         }
-    def _full_name(self):
-        """Combine name parts — useful for admin display"""
+    def sender_full_name(self):
         parts = [self.sender_first_name, self.sender_middle_name, self.sender_last_name]
         return " ".join(p for p in parts if p) or None
 

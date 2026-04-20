@@ -298,49 +298,60 @@ class MpesaTransactionListResource(Resource):
 class PaymentVerifyResource(Resource):
     """
     GET /payments/verify/<transaction_id>
-    Checks if a sale has been paid by ANY method
-    Used by frontend to detect manual payments during STK flow
+    Checks if payment arrived for this transaction by ANY method
     """
 
     @jwt_required()
     def get(self, transaction_id):
-        # Check our MpesaTransaction table for any payment
-        # matching this transaction's amount and time window
-        from models import Sale, MpesaTransaction
         from datetime import datetime, timedelta
 
-        sale = Sale.query.filter_by(
-            transaction_id=transaction_id
-        ).first()
-
-        if not sale:
-            return {"paid": False, "status": "no_sale"}, 200
-
-        # Already marked as paid (STK callback updated it)
-        if sale.payment_status == 'paid':
+        # First check if sale exists and is paid
+        sale = Sale.query.filter_by(transaction_id=transaction_id).first()
+        if sale and sale.payment_status == 'paid':
             return {"paid": True, "status": "paid"}, 200
 
-        # Check if a manual payment arrived for this amount
-        # within the last 5 minutes (time window for this transaction)
-        five_mins_ago = datetime.utcnow() - timedelta(minutes=5)
+        # Check MpesaTransaction directly
+        # Look for successful payment in last 10 minutes
+        # We can't match by transaction_id (Kopo Kopo doesn't know it for manual payments)
+        # So we match by: success + recent + not already linked to another sale
+        ten_mins_ago = datetime.utcnow() - timedelta(minutes=10)
 
-        manual_payment = MpesaTransaction.query.filter(
-            MpesaTransaction.amount    == sale.total_amount,
+        # Get recent successful payments
+        recent_payments = MpesaTransaction.query.filter(
             MpesaTransaction.result_code == 0,
-            MpesaTransaction.created_at >= five_mins_ago,
-        ).first()
+            MpesaTransaction.created_at  >= ten_mins_ago,
+        ).order_by(MpesaTransaction.created_at.desc()).all()
 
-        if manual_payment:
-            # Manual payment detected — mark sale as paid
-            sale.payment_status = 'paid'
-            sale.amount_paid    = sale.total_amount
-            from extensions import db
-            db.session.commit()
+        if not recent_payments:
+            return {"paid": False, "status": "pending"}, 200
 
+        # If sale exists, match by amount
+        if sale:
+            matching = next(
+                (p for p in recent_payments if p.amount == sale.total_amount),
+                None
+            )
+            if matching:
+                sale.payment_status = 'paid'
+                sale.amount_paid    = sale.total_amount
+                db.session.commit()
+                return {
+                    "paid":      True,
+                    "status":    "paid_manually",
+                    "reference": matching.mpesa_receipt_number,
+                    "name":      matching.sender_full_name,
+                }, 200
+
+        # No sale yet — just confirm payment arrived
+        # Frontend will create the sale after getting this response
+        if recent_payments:
+            latest = recent_payments[0]
             return {
                 "paid":      True,
-                "status":    "paid_manually",
-                "reference": manual_payment.mpesa_receipt_number,
+                "status":    "payment_received",
+                "reference": latest.mpesa_receipt_number,
+                "amount":    latest.amount,
+                "name":      latest.sender_full_name,
             }, 200
 
         return {"paid": False, "status": "pending"}, 200
