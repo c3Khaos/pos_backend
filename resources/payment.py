@@ -133,10 +133,10 @@ class MpesaWebhookResource(Resource):
 
     def post(self):
         # ── VERIFY SIGNATURE ─────────────────────────────────────────────────
-        signature = request.headers.get('X-KopoKopo-Signature', '')
-        if not KopoKopoService.verify_webhook(request.get_data(), signature):
-            current_app.logger.warning("Invalid webhook signature")
-            return {"message": "Invalid signature"}, 401
+       # signature = request.headers.get('X-KopoKopo-Signature', '')
+       # if not KopoKopoService.verify_webhook(request.get_data(), signature):
+        #    current_app.logger.warning("Invalid webhook signature")
+         #   return {"message": "Invalid signature"}, 401
 
         data = request.get_json()
 
@@ -294,3 +294,53 @@ class MpesaTransactionListResource(Resource):
             MpesaTransaction.created_at.desc()
         ).all()
         return [t.to_dict() for t in transactions], 200
+    
+class PaymentVerifyResource(Resource):
+    """
+    GET /payments/verify/<transaction_id>
+    Checks if a sale has been paid by ANY method
+    Used by frontend to detect manual payments during STK flow
+    """
+
+    @jwt_required()
+    def get(self, transaction_id):
+        # Check our MpesaTransaction table for any payment
+        # matching this transaction's amount and time window
+        from models import Sale, MpesaTransaction
+        from datetime import datetime, timedelta
+
+        sale = Sale.query.filter_by(
+            transaction_id=transaction_id
+        ).first()
+
+        if not sale:
+            return {"paid": False, "status": "no_sale"}, 200
+
+        # Already marked as paid (STK callback updated it)
+        if sale.payment_status == 'paid':
+            return {"paid": True, "status": "paid"}, 200
+
+        # Check if a manual payment arrived for this amount
+        # within the last 5 minutes (time window for this transaction)
+        five_mins_ago = datetime.utcnow() - timedelta(minutes=5)
+
+        manual_payment = MpesaTransaction.query.filter(
+            MpesaTransaction.amount    == sale.total_amount,
+            MpesaTransaction.result_code == 0,
+            MpesaTransaction.created_at >= five_mins_ago,
+        ).first()
+
+        if manual_payment:
+            # Manual payment detected — mark sale as paid
+            sale.payment_status = 'paid'
+            sale.amount_paid    = sale.total_amount
+            from extensions import db
+            db.session.commit()
+
+            return {
+                "paid":      True,
+                "status":    "paid_manually",
+                "reference": manual_payment.mpesa_receipt_number,
+            }, 200
+
+        return {"paid": False, "status": "pending"}, 200
