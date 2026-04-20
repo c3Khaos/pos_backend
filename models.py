@@ -55,7 +55,7 @@ class Sale(db.Model):
             "amount_paid": self.amount_paid,
             "change": change,
             "payment_method":self.payment_method,
-            "sale_date":self.sale_date.isoformat(),
+            "sale_date":self.sale_date.isoformat() + "Z",
             "user":self.seller.username if self.seller else None,
             "customer_name":  self.customer_name,
             "customer_phone": self.customer_phone,
@@ -128,7 +128,7 @@ class Supplier(db.Model):
             "phone": self.phone,
             "email": self.email,
             "address": self.address,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat() + "Z"
         }
     
 class Expense(db.Model):
@@ -148,9 +148,9 @@ class Expense(db.Model):
             "description": self.description,
             "amount": self.amount,
             "category": self.category,
-            "expense_date": self.expense_date.isoformat(),
+            "expense_date": self.expense_date.isoformat() + "Z",
             "recorded_by": self.recorded_by,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat() + "Z"
         }
     
 class MpesaTransaction(db.Model):
@@ -176,7 +176,7 @@ class MpesaTransaction(db.Model):
             "amount": self.amount,
             "mpesa_receipt_number": self.mpesa_receipt_number,
             "phone_number": self.phone_number,
-            "transaction_date": self.transaction_date,
+            "transaction_date": self.transaction_date + "Z",
             "created_at": self.created_at.isoformat(),
             "status": "success" if self.result_code == 0 else "failed"
         }
@@ -197,6 +197,6 @@ class DebtPayment(db.Model):
             "sale_id":     self.sale_id,
             "amount":      self.amount,
             "method":      self.method,
-            "paid_at":     self.paid_at.isoformat() if self.paid_at else None,
+            "paid_at":     self.paid_at.isoformat() + "Z" if self.paid_at else None,
             "received_by": self.received_by,
         }
