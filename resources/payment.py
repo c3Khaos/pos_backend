@@ -130,6 +130,12 @@ class MpesaWebhookResource(Resource):
     """
 
     def post(self):
+        # ── VERIFY SIGNATURE ─────────────────────────────────────────────────
+        signature = request.headers.get('X-KopoKopo-Signature', '')
+        if not KopoKopoService.verify_webhook(request.get_data(), signature):
+            current_app.logger.warning("Invalid webhook signature")
+            return {"message": "Invalid signature"}, 401
+
         data = request.get_json()
         current_app.logger.info(f"WEBHOOK RECEIVED: {data}")
 
