@@ -346,3 +346,20 @@ class KopoKopoService:
 
         # Fallback — return as-is and let Kopo Kopo reject if invalid
         return phone
+    
+    @classmethod
+    def subscribe_webhook(cls, event_type, scope, scope_reference):
+        """
+        Create a webhook subscription.
+        Call this ONCE after deployment to register for events.
+        """
+        url = f'{cls._base_url()}/api/v1/webhook_subscriptions'
+        data = {
+            'event_type':      event_type,   # e.g. "buygoods_transaction_received"
+            'url':             f"{current_app.config['KOPOKOPO_CALLBACK_URL'].replace('/callback', '')}/webhook",
+            'scope':           scope,         # "till" or "company"
+            'scope_reference': scope_reference,  # till number if scope=till
+        }
+        
+        response = requests.post(url, json=data, headers=cls._headers(), timeout=30)
+        return response.status_code == 201, response.text

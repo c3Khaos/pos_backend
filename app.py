@@ -15,7 +15,7 @@ from resources.userActions import UserListResource, UserResource
 from auth import LoginResource, RegisterResource
 from resources.graphs import SalesTrend
 from resources.dashboardStatus import DashboardInfo
-from resources.payment import PaymentResource, PaymentCallbackResource, CheckPaymentStatusResource, MpesaTransactionListResource
+from resources.payment import PaymentResource, PaymentCallbackResource, CheckPaymentStatusResource,MpesaWebhookResource , MpesaTransactionListResource
 from resources.suppliers import SupplierListResource, SupplierResource
 from resources.expenses import ExpenseListResource, ExpenseResource
 from resources.debtors import DebtorListResource, DebtorDetailResource, DebtorPaymentResource
@@ -58,6 +58,7 @@ with app.app_context():
     api.add_resource(PaymentCallbackResource, "/payments/callback")
     api.add_resource(MpesaTransactionListResource, '/mpesa-transactions')
     api.add_resource(CheckPaymentStatusResource,"/payments/check/<string:checkout_payment_id>")
+    api.add_resource(MpesaWebhookResource, "/payments/webhook")
     api.add_resource(SupplierListResource, '/suppliers')
     api.add_resource(SupplierResource, '/suppliers/<int:supplier_id>')
     api.add_resource(ExpenseListResource, '/expenses')
