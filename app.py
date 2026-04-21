@@ -51,7 +51,7 @@ with app.app_context():
     api.add_resource(LoginResource,                "/login")
     api.add_resource(PaymentResource,              "/payments")
     api.add_resource(PaymentCallbackResource,      "/payments/callback")
-    api.add_resource(CheckPaymentStatusResource,   "/payments/check/<string:checkout_payment_id>")
+    api.add_resource(CheckPaymentStatusResource,   "/payments/check/<string:payment_id>")
     api.add_resource(MpesaWebhookResource,         "/payments/webhook")
     api.add_resource(MpesaTransactionListResource, "/mpesa-transactions")
     api.add_resource(SalesTrend,                   "/salestrend")
