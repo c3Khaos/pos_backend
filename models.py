@@ -138,13 +138,14 @@ class Supplier(db.Model):
 class Expense(db.Model):
     __tablename__ = 'expenses'
 
-    id           = db.Column(db.Integer, primary_key=True)
+    id           = db.Column(db.Integer,     primary_key=True)
     description  = db.Column(db.String(200), nullable=False)
-    amount       = db.Column(db.Float, nullable=False)
-    category     = db.Column(db.String(80), nullable=False)
-    expense_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    recorded_by  = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    amount       = db.Column(db.Float,       nullable=False)
+    category     = db.Column(db.String(80),  nullable=False)
+    department   = db.Column(db.String(20),  nullable=False, default='shop')  # 👈 NEW
+    expense_date = db.Column(db.DateTime,    nullable=False, default=datetime.utcnow)
+    recorded_by  = db.Column(db.Integer,     db.ForeignKey('users.id'), nullable=True)
+    created_at   = db.Column(db.DateTime,    default=datetime.utcnow)
 
     def to_dict(self):
         return {
@@ -152,12 +153,12 @@ class Expense(db.Model):
             "description":  self.description,
             "amount":       self.amount,
             "category":     self.category,
+            "department":   self.department,   # 👈 NEW
             "expense_date": self.expense_date.isoformat() + "Z",
             "recorded_by":  self.recorded_by,
             "created_at":   self.created_at.isoformat() + "Z",
         }
-
-
+    
 class MpesaTransaction(db.Model):
     __tablename__ = 'mpesa_transactions'
 
