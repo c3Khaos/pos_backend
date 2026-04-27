@@ -23,7 +23,7 @@ class HardwareDashboardResource(Resource):
 
     @jwt_required()
     def get(self):
-        if not is_admin(get_jwt_identity()):
+        if not is_admin(int(get_jwt_identity())):
             return {"message": "Admin access required."}, 403
 
         today       = datetime.utcnow().date()
@@ -143,7 +143,7 @@ class HardwareSalesTrendResource(Resource):
 
     @jwt_required()
     def get(self):
-        if not is_admin(get_jwt_identity()):
+        if not is_admin(int(get_jwt_identity())):
             return {"message": "Admin access required."}, 403
 
         days = int(request.args.get('days', 7))
@@ -190,7 +190,7 @@ class HardwareSalesResource(Resource):
 
     @jwt_required()
     def get(self):
-        if not is_admin(get_jwt_identity()):
+        if not is_admin(int(get_jwt_identity())):
             return {"message": "Admin access required."}, 403
 
         date_str = request.args.get('date')
@@ -237,7 +237,7 @@ class HardwareLowStockResource(Resource):
 
     @jwt_required()
     def get(self):
-        if not is_admin(get_jwt_identity()):
+        if not is_admin(int(get_jwt_identity())):
             return {"message": "Admin access required."}, 403
 
         low_stock    = Product.query.filter(

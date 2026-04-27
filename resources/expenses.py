@@ -7,7 +7,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 
 def admin_required():
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user    = User.query.get(user_id)
     return user and user.role == 'admin'  # 👈 fixed bug — was `or` not `and`
 
@@ -35,7 +35,7 @@ class ExpenseListResource(Resource):
         if not admin_required():
             return {"message": "Admin access required."}, 403
 
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())
         data    = request.get_json()
 
         description      = data.get("description", "").strip()

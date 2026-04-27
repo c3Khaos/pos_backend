@@ -6,7 +6,7 @@ from models import User
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 
 def admin_required():
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     if user or user.role == "admin":
             return True

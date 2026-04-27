@@ -32,7 +32,7 @@ class ProductListResource(Resource):
 
     @jwt_required()
     def post(self):
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())
         user = User.query.get(user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
@@ -77,7 +77,7 @@ class ProductResource(Resource):
 
     @jwt_required()
     def patch(self, product_id):
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())
         user    = User.query.get(user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
@@ -98,7 +98,7 @@ class ProductResource(Resource):
 
     @jwt_required()
     def delete(self, product_id):
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())
         user    = User.query.get(user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403

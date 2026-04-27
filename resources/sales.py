@@ -23,7 +23,7 @@ class SaleListResource(Resource):
 
     @jwt_required()
     def get(self):
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
 
         # ── Exclude hardware sales from shop sales history ────────────────
         hw_ids = get_hardware_sale_ids()
@@ -38,7 +38,7 @@ class SaleListResource(Resource):
 
     @jwt_required()
     def post(self):
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())
         if not user_id:
             return {"error": "Unauthorized. Please log in."}, 401
 

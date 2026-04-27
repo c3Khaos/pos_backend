@@ -22,7 +22,7 @@ class DebtorListResource(Resource):
 
     @jwt_required()
     def get(self):
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())
         user    = User.query.get(user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
@@ -72,7 +72,7 @@ class DebtorDetailResource(Resource):
 
     @jwt_required()
     def get(self, sale_id):
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())
         user    = User.query.get(user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
@@ -97,7 +97,7 @@ class DebtorPaymentResource(Resource):
 
     @jwt_required()
     def post(self, sale_id):
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())
         user    = User.query.get(user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403

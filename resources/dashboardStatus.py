@@ -2,9 +2,10 @@ from flask_restful import Resource
 from models import User, SaleItem, Product, Sale, Expense, CashAdvance, db
 from sqlalchemy import func
 from datetime import datetime, timezone, timedelta
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 HARDWARE_CATEGORY = 'Hardware & Utilities'
+
 
 def hardware_sale_ids_subquery():
     return db.session.query(SaleItem.sale_id).join(
@@ -61,23 +62,23 @@ class DashboardInfo(Resource):
                     Product.category != HARDWARE_CATEGORY
                 ).scalar() or 0
 
-            # ── Expenses — SHOP ONLY ──────────────────────────────────────────
+            # ── Expenses — shop only ──────────────────────────────────────────
             today_expenses = db.session.query(func.sum(Expense.amount))\
                 .filter(
                     Expense.expense_date >= today_start,
                     Expense.expense_date <  today_end,
-                    Expense.department   == 'shop'       # 👈 shop only
+                    Expense.department   == 'shop'
                 ).scalar() or 0
 
             month_expenses = db.session.query(func.sum(Expense.amount))\
                 .filter(
                     Expense.expense_date >= month_start,
-                    Expense.department   == 'shop'       # 👈 shop only
+                    Expense.department   == 'shop'
                 ).scalar() or 0
 
             total_expenses = db.session.query(func.sum(Expense.amount))\
                 .filter(Expense.department == 'shop')\
-                .scalar() or 0                           # 👈 shop only
+                .scalar() or 0
 
             # ── Low stock — shop only ─────────────────────────────────────────
             low_stock = Product.query.filter(
@@ -111,8 +112,8 @@ class DashboardInfo(Resource):
                     {"id": p.id, "name": p.name, "stock": p.stock}
                     for p in low_stock
                 ],
-                "advances_owed":      round(float(advances_owed), 2),
-                "advances_count":     advances_count,
+                "advances_owed":  round(float(advances_owed), 2),
+                "advances_count": advances_count,
             }, 200
 
         except Exception as e:

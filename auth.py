@@ -22,8 +22,8 @@ class LoginResource(Resource):
                 return {"message":"Account deactivated. Contact Admin."},403
             #implement the jwt
             #"identy" is wht you get back after you verify the token ie user.id
-            access_token = create_access_token(identity=user.id)
-            refresh_token = create_refresh_token(identity = user.id)
+            access_token = create_access_token(identity=str(user.id))
+            refresh_token = create_refresh_token(identity = str(user.id))
             
             #return the token to the frontend
             return {

@@ -17,38 +17,35 @@ class CashAdvanceListResource(Resource):
 
     @jwt_required()
     def get(self):
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())  # 👈 fix
         if not is_admin(user_id):
             return {"message": "Admin access required."}, 403
 
-        department = request.args.get('department')  # shop | hardware | None = all
-        status     = request.args.get('status')      # pending | partial | returned | None = all
+        department = request.args.get('department')
+        status     = request.args.get('status')
+        show_all   = request.args.get('all') == 'true'
 
         query = CashAdvance.query
 
         if department:
             query = query.filter(CashAdvance.department == department)
 
-        if status:
-            query = query.filter(CashAdvance.status == status)
-        else:
-            # Default: show pending and partial only (outstanding)
-            query = query.filter(CashAdvance.status.in_(['pending', 'partial']))
-
-        if request.args.get('all') == 'true':
-            # Fetch all including returned
-            query = CashAdvance.query
-            if department:
-                query = query.filter(CashAdvance.department == department)
+        if show_all:
+            # Return everything including returned
             if status:
                 query = query.filter(CashAdvance.status == status)
+        elif status:
+            query = query.filter(CashAdvance.status == status)
+        else:
+            # Default: outstanding only
+            query = query.filter(CashAdvance.status.in_(['pending', 'partial']))
 
         advances = query.order_by(CashAdvance.taken_at.desc()).all()
         return [a.to_dict() for a in advances], 200
 
     @jwt_required()
     def post(self):
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())  # 👈 fix
         if not is_admin(user_id):
             return {"message": "Admin access required."}, 403
 
@@ -85,7 +82,6 @@ class CashAdvanceListResource(Resource):
         )
         db.session.add(advance)
         db.session.commit()
-
         return advance.to_dict(), 201
 
 
@@ -94,7 +90,7 @@ class CashAdvanceReturnResource(Resource):
 
     @jwt_required()
     def post(self, advance_id):
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())  # 👈 fix
         if not is_admin(user_id):
             return {"message": "Admin access required."}, 403
 
@@ -152,7 +148,7 @@ class CashAdvanceSummaryResource(Resource):
 
     @jwt_required()
     def get(self):
-        user_id = get_jwt_identity()
+        user_id = int(get_jwt_identity())  # 👈 fix
         if not is_admin(user_id):
             return {"message": "Admin access required."}, 403
 
