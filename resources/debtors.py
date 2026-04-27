@@ -6,6 +6,7 @@ from extensions import db
 
 HARDWARE_CATEGORY = 'Hardware & Utilities'
 
+
 def hardware_sale_ids():
     """Returns list of sale IDs that contain hardware products."""
     rows = db.session.query(SaleItem.sale_id).join(
@@ -17,7 +18,7 @@ def hardware_sale_ids():
 
 
 class DebtorListResource(Resource):
-    """GET /debtors — list unpaid/partial sales (shop only, admin only)"""
+    """GET /debtors?department=shop|hardware — list unpaid/partial sales (admin only)"""
 
     @jwt_required()
     def get(self):
@@ -26,13 +27,28 @@ class DebtorListResource(Resource):
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
 
-        status = request.args.get('status')
+        status     = request.args.get('status')
+        department = request.args.get('department', 'shop')  # default to shop
+
         hw_ids = hardware_sale_ids()
 
-        # Base query — exclude hardware sales
-        base = Sale.query.filter(~Sale.id.in_(hw_ids)) if hw_ids else Sale.query
+        # ── Filter by department ──────────────────────────────────────────
+        if department == 'hardware':
+            # Hardware debtors ONLY — sales that contain hardware products
+            if hw_ids:
+                base = Sale.query.filter(Sale.id.in_(hw_ids))
+            else:
+                # No hardware sales exist yet — return empty
+                base = Sale.query.filter(False)
+        else:
+            # Shop debtors — EXCLUDE hardware sales
+            if hw_ids:
+                base = Sale.query.filter(~Sale.id.in_(hw_ids))
+            else:
+                base = Sale.query
 
-        if status:
+        # ── Filter by payment status ──────────────────────────────────────
+        if status and status != 'all':
             query = base.filter(Sale.payment_status == status)
         else:
             query = base.filter(Sale.payment_status.in_(['unpaid', 'partial']))
@@ -41,8 +57,11 @@ class DebtorListResource(Resource):
         return [self._enrich(sale) for sale in debtors], 200
 
     def _enrich(self, sale):
-        data        = sale.to_dict()
-        total_paid  = sum(p.amount for p in DebtPayment.query.filter_by(sale_id=sale.id))
+        """Add calculated debt fields to the sale dict."""
+        data       = sale.to_dict()
+        total_paid = sum(
+            p.amount for p in DebtPayment.query.filter_by(sale_id=sale.id)
+        )
         data['total_paid']  = total_paid
         data['amount_owed'] = sale.total_amount - total_paid
         return data
@@ -120,8 +139,8 @@ class DebtorPaymentResource(Resource):
             )
             db.session.add(payment)
 
-            total_paid_after = total_paid_before + amount
-            sale.amount_paid = total_paid_after
+            total_paid_after    = total_paid_before + amount
+            sale.amount_paid    = total_paid_after
             sale.payment_status = 'paid' if total_paid_after >= sale.total_amount else 'partial'
 
             db.session.commit()
