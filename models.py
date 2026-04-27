@@ -224,3 +224,32 @@ class DebtPayment(db.Model):
             "paid_at":     self.paid_at.isoformat() + "Z" if self.paid_at else None,
             "received_by": self.received_by,
         }
+    
+class CashAdvance(db.Model):
+    __tablename__ = 'cash_advances'
+
+    id               = db.Column(db.Integer,     primary_key=True)
+    person_name      = db.Column(db.String(100), nullable=False)
+    amount           = db.Column(db.Float,       nullable=False)
+    reason           = db.Column(db.String(255), nullable=True)
+    amount_returned  = db.Column(db.Float,       default=0)
+    status           = db.Column(db.String(20),  default='pending')  # pending | partial | returned
+    department       = db.Column(db.String(20),  default='shop')     # shop | hardware
+    taken_at         = db.Column(db.DateTime,    default=lambda: datetime.now(timezone.utc))
+    returned_at      = db.Column(db.DateTime,    nullable=True)
+    recorded_by      = db.Column(db.Integer,     db.ForeignKey('users.id'), nullable=True)
+
+    def to_dict(self):
+        return {
+            'id':              self.id,
+            'person_name':     self.person_name,
+            'amount':          self.amount,
+            'reason':          self.reason,
+            'amount_returned': self.amount_returned or 0,
+            'amount_owed':     self.amount - (self.amount_returned or 0),
+            'status':          self.status,
+            'department':      self.department,
+            'taken_at':        self.taken_at.isoformat() if self.taken_at else None,
+            'returned_at':     self.returned_at.isoformat() if self.returned_at else None,
+            'recorded_by':     self.recorded_by,
+        }

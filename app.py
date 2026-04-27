@@ -25,6 +25,11 @@ from resources.hardware import (
     HardwareSalesResource,
     HardwareLowStockResource,
 )
+from resources.advances import (
+    CashAdvanceListResource,
+    CashAdvanceReturnResource,
+    CashAdvanceSummaryResource,
+)
 from resources.suppliers import SupplierListResource, SupplierResource
 from resources.expenses import ExpenseListResource, ExpenseResource
 from resources.debtors import DebtorListResource, DebtorDetailResource, DebtorPaymentResource
@@ -73,7 +78,9 @@ with app.app_context():
     api.add_resource(HardwareSalesTrendResource, "/hardware/sales-trend")
     api.add_resource(HardwareSalesResource,      "/hardware/sales")
     api.add_resource(HardwareLowStockResource,   "/hardware/low-stock")
-
+    api.add_resource(CashAdvanceListResource,    '/advances')
+    api.add_resource(CashAdvanceReturnResource,  '/advances/<int:advance_id>/return')
+    api.add_resource(CashAdvanceSummaryResource, '/advances/summary')
 
 @app.route("/")
 def index():
