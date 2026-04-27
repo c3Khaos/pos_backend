@@ -19,6 +19,12 @@ from resources.payment import (
     MpesaWebhookResource,
     MpesaTransactionListResource,
 )
+from resources.hardware import (
+    HardwareDashboardResource,
+    HardwareSalesTrendResource,
+    HardwareSalesResource,
+    HardwareLowStockResource,
+)
 from resources.suppliers import SupplierListResource, SupplierResource
 from resources.expenses import ExpenseListResource, ExpenseResource
 from resources.debtors import DebtorListResource, DebtorDetailResource, DebtorPaymentResource
@@ -63,6 +69,10 @@ with app.app_context():
     api.add_resource(DebtorListResource,           "/debtors")
     api.add_resource(DebtorDetailResource,         "/debtors/<int:sale_id>")
     api.add_resource(DebtorPaymentResource,        "/debtors/<int:sale_id>/pay")
+    api.add_resource(HardwareDashboardResource,  "/hardware/dashboard-stats")
+    api.add_resource(HardwareSalesTrendResource, "/hardware/sales-trend")
+    api.add_resource(HardwareSalesResource,      "/hardware/sales")
+    api.add_resource(HardwareLowStockResource,   "/hardware/low-stock")
 
 
 @app.route("/")

@@ -1,12 +1,23 @@
 from flask import request
 from flask_restful import Resource
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import Sale, DebtPayment, User
+from models import Sale, SaleItem, Product, DebtPayment, User
 from extensions import db
+
+HARDWARE_CATEGORY = 'Hardware & Utilities'
+
+def hardware_sale_ids():
+    """Returns list of sale IDs that contain hardware products."""
+    rows = db.session.query(SaleItem.sale_id).join(
+        Product, SaleItem.product_id == Product.id
+    ).filter(
+        Product.category == HARDWARE_CATEGORY
+    ).distinct().all()
+    return [row[0] for row in rows]
 
 
 class DebtorListResource(Resource):
-    """GET /debtors — list unpaid/partial sales (admin only)"""
+    """GET /debtors — list unpaid/partial sales (shop only, admin only)"""
 
     @jwt_required()
     def get(self):
@@ -16,19 +27,22 @@ class DebtorListResource(Resource):
             return {"message": "Admin access required."}, 403
 
         status = request.args.get('status')
+        hw_ids = hardware_sale_ids()
+
+        # Base query — exclude hardware sales
+        base = Sale.query.filter(~Sale.id.in_(hw_ids)) if hw_ids else Sale.query
 
         if status:
-            query = Sale.query.filter(Sale.payment_status == status)
+            query = base.filter(Sale.payment_status == status)
         else:
-            query = Sale.query.filter(Sale.payment_status.in_(['unpaid', 'partial']))
+            query = base.filter(Sale.payment_status.in_(['unpaid', 'partial']))
 
         debtors = query.order_by(Sale.sale_date.desc()).all()
         return [self._enrich(sale) for sale in debtors], 200
 
     def _enrich(self, sale):
-        """Add calculated debt fields to the sale dict"""
-        data = sale.to_dict()
-        total_paid = sum(p.amount for p in DebtPayment.query.filter_by(sale_id=sale.id))
+        data        = sale.to_dict()
+        total_paid  = sum(p.amount for p in DebtPayment.query.filter_by(sale_id=sale.id))
         data['total_paid']  = total_paid
         data['amount_owed'] = sale.total_amount - total_paid
         return data
@@ -45,7 +59,8 @@ class DebtorDetailResource(Resource):
             return {"message": "Admin access required."}, 403
 
         sale     = Sale.query.get_or_404(sale_id)
-        payments = DebtPayment.query.filter_by(sale_id=sale_id).order_by(DebtPayment.paid_at.desc()).all()
+        payments = DebtPayment.query.filter_by(sale_id=sale_id)\
+                              .order_by(DebtPayment.paid_at.desc()).all()
 
         total_paid  = sum(p.amount for p in payments)
         amount_owed = sale.total_amount - total_paid
@@ -74,7 +89,6 @@ class DebtorPaymentResource(Resource):
         amount = data.get('amount')
         method = data.get('method', 'cash')
 
-        # --- validation ---
         if amount is None:
             return {"message": "Amount is required."}, 400
 
@@ -89,15 +103,15 @@ class DebtorPaymentResource(Resource):
         if sale.payment_status == 'paid':
             return {"message": "This debt is already fully paid."}, 400
 
-        # --- calculate current debt ---
-        total_paid_before = sum(p.amount for p in DebtPayment.query.filter_by(sale_id=sale.id))
-        amount_owed       = sale.total_amount - total_paid_before
+        total_paid_before = sum(
+            p.amount for p in DebtPayment.query.filter_by(sale_id=sale.id)
+        )
+        amount_owed = sale.total_amount - total_paid_before
 
         if amount > amount_owed:
             return {"message": f"Payment exceeds amount owed (KSh {amount_owed:.2f})."}, 400
 
         try:
-            # --- record payment ---
             payment = DebtPayment(
                 sale_id     = sale.id,
                 amount      = amount,
@@ -106,14 +120,9 @@ class DebtorPaymentResource(Resource):
             )
             db.session.add(payment)
 
-            # --- update sale status ---
             total_paid_after = total_paid_before + amount
             sale.amount_paid = total_paid_after
-
-            if total_paid_after >= sale.total_amount:
-                sale.payment_status = 'paid'
-            else:
-                sale.payment_status = 'partial'
+            sale.payment_status = 'paid' if total_paid_after >= sale.total_amount else 'partial'
 
             db.session.commit()
 
@@ -127,5 +136,4 @@ class DebtorPaymentResource(Resource):
 
         except Exception as e:
             db.session.rollback()
-            print(f"Error recording debt payment: {e}")
             return {"message": "An error occurred while recording the payment."}, 500
