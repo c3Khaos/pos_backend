@@ -87,25 +87,6 @@ with app.app_context():
 def index():
     return {"Message": "Welcome to POS backend API"}, 200
 
-@app.route("/setup/seed-admin")
-def seed_admin_route():
-    from models import User
-    from extensions import db
-
-    existing = User.query.filter_by(username="joyce").first()
-    if existing:
-        return {"message": "Admin already exists"}, 200
-
-    admin = User(
-        username = "joyce",
-        email    = "joycewanjiku494@gmail.com",
-        role     = "admin",
-        active   = True
-    )
-    admin.set_password("@joyce")  
-    db.session.add(admin)
-    db.session.commit()
-    return {"message": "Admin seeded successfully!"}, 200
 
 if __name__ == "__main__":
     app.run(host="localhost", debug=True, port=5555)
