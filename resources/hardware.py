@@ -7,7 +7,7 @@ from sqlalchemy import func, cast, Date
 from datetime import datetime, timedelta
 
 HARDWARE_CATEGORY   = 'Hardware & Utilities'
-LOW_STOCK_THRESHOLD = 5
+LOW_STOCK_THRESHOLD = 1
 
 
 def is_admin(user_id):
