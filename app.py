@@ -6,7 +6,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 
 from config import Config
-from resources.products import ProductListResource, ProductResource
+from resources.products import ProductListResource, ProductResource ,ProductCSVUploadResource
 from resources.sales import SaleListResource
 from resources.userActions import UserListResource, UserResource
 from auth import LoginResource, RegisterResource
@@ -81,6 +81,7 @@ with app.app_context():
     api.add_resource(CashAdvanceListResource,    '/advances')
     api.add_resource(CashAdvanceReturnResource,  '/advances/<int:advance_id>/return')
     api.add_resource(CashAdvanceSummaryResource, '/advances/summary')
+    api.add_resource(ProductCSVUploadResource, '/products/upload-csv')
 
 @app.route("/")
 def index():
