@@ -97,7 +97,7 @@ class Product(db.Model):
     category   = db.Column(db.String(80), nullable=False)
     price      = db.Column(db.Float, nullable=False)
     unit_price = db.Column(db.Float, nullable=False)
-    stock      = db.Column(db.Integer, nullable=False)
+    stock      = db.Column(db.Float, nullable=False)
     barcode    = db.Column(db.String, nullable=True, unique=True, index=True)
     sold_loose = db.Column(db.Boolean, default=False, nullable=False)
 
