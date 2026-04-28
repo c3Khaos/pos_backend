@@ -131,21 +131,21 @@ class MpesaWebhookResource(Resource):
 
     def post(self):
         # ── VERIFY SIGNATURE ─────────────────────────────────────────────────
-        # signature = request.headers.get('X-KopoKopo-Signature', '')
-        # if not KopoKopoService.verify_webhook(request.get_data(), signature):
-        #     current_app.logger.warning("Invalid webhook signature")
-        #     return {"message": "Invalid signature"}, 401
+         signature = request.headers.get('X-KopoKopo-Signature', '')
+         if not KopoKopoService.verify_webhook(request.get_data(), signature):
+             current_app.logger.warning("Invalid webhook signature")
+             return {"message": "Invalid signature"}, 401
 
-        data = request.get_json()
-        current_app.logger.info(f"WEBHOOK RECEIVED: {data}")
+         data = request.get_json()
+         current_app.logger.info(f"WEBHOOK RECEIVED: {data}")
 
-        if 'topic' in data:
-            return self._handle_buygoods(data)
-        elif data.get('data', {}).get('type') == 'incoming_payment':
-            return self._handle_stk_result(data)
-        else:
-            current_app.logger.warning("Unknown webhook format received")
-            return {"message": "Unknown webhook type"}, 200
+         if 'topic' in data:
+             return self._handle_buygoods(data)
+         elif data.get('data', {}).get('type') == 'incoming_payment':
+             return self._handle_stk_result(data)
+         else:
+             current_app.logger.warning("Unknown webhook format received")
+             return {"message": "Unknown webhook type"}, 200
 
     def _handle_buygoods(self, data):
         """Handles till payments — manually initiated by customer"""
