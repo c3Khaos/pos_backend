@@ -45,7 +45,7 @@ class ProductListResource(Resource):
         try:
             price      = float(request.form.get("price"))
             unit_price = float(request.form.get("unit_price"))
-            stock      = int(request.form.get("stock"))
+            stock      = float(request.form.get("stock"))
             if price <= 0 or unit_price <= 0 or stock < 0:
                 return {"message": "Price and unit price must be positive. Stock cannot be negative."}, 400
         except (TypeError, ValueError):
