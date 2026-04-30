@@ -9,7 +9,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 def admin_required():
     user_id = int(get_jwt_identity())
     user    = User.query.get(user_id)
-    return user and user.role == 'admin'  # 👈 fixed bug — was `or` not `and`
+    return user and user.role == 'admin'  
 
 
 class ExpenseListResource(Resource):
@@ -42,7 +42,7 @@ class ExpenseListResource(Resource):
         amount           = data.get("amount")
         category         = data.get("category", "").strip()
         expense_date_str = data.get("expense_date")
-        department       = data.get("department", "shop")  # 👈 NEW
+        department       = data.get("department", "shop")  
 
         if not description or amount is None or not category:
             return {"message": "Description, amount and category are required."}, 400
