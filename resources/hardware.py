@@ -23,7 +23,7 @@ def hw_sale_ids_subquery():
         .join(Product, SaleItem.product_id == Product.id)
         .filter(Product.category == HARDWARE_CATEGORY)
         .distinct()
-        .subquery()
+        .scalar_subquery()
     )
 
 
@@ -237,14 +237,7 @@ class HardwareSalesResource(Resource):
 
         hw_sale_ids = hw_sale_ids_subquery()
 
-        # Eager-load items + products so .to_dict() doesn't trigger lazy loads
-        query = (
-            Sale.query
-            .filter(Sale.id.in_(hw_sale_ids))
-            .options(
-                joinedload(Sale.items).joinedload(SaleItem.product)
-            )
-        )
+        query = Sale.query.filter(Sale.id.in_(hw_sale_ids))
 
         if date_str:
             try:
