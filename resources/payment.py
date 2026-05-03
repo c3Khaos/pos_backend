@@ -34,7 +34,7 @@ class PaymentResource(Resource):
                 transaction_id = transaction_id,
             )
         except Exception as e:
-            current_app.logger.error(f"STK Push error: {e}")
+            current_app.logger.error(f"STK push error: {e}")
             return {"message": "Failed to initiate payment. Try again."}, 500
 
         if not result['success']:
