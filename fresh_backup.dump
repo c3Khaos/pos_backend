@@ -1,0 +1,1521 @@
+--
+-- PostgreSQL database dump
+--
+
+\restrict AV7kX3K650sC4mfxhg6nTVfyNptpntXqGTVIpxSVlGK6oOZ7G4AFtTBfvGxUrMx
+
+-- Dumped from database version 17.6
+-- Dumped by pg_dump version 17.9 (Ubuntu 17.9-1.pgdg24.04+1)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA public;
+
+
+--
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON SCHEMA public IS 'standard public schema';
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: alembic_version; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alembic_version (
+    version_num character varying(32) NOT NULL
+);
+
+
+--
+-- Name: cash_advances; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cash_advances (
+    id integer NOT NULL,
+    person_name character varying(100) NOT NULL,
+    amount double precision NOT NULL,
+    reason character varying(255),
+    amount_returned double precision,
+    status character varying(20),
+    department character varying(20),
+    taken_at timestamp without time zone,
+    returned_at timestamp without time zone,
+    recorded_by integer
+);
+
+
+--
+-- Name: cash_advances_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.cash_advances_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: cash_advances_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.cash_advances_id_seq OWNED BY public.cash_advances.id;
+
+
+--
+-- Name: debt_payments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.debt_payments (
+    id integer NOT NULL,
+    sale_id integer NOT NULL,
+    amount double precision NOT NULL,
+    method character varying(20),
+    paid_at timestamp without time zone,
+    received_by integer
+);
+
+
+--
+-- Name: debt_payments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.debt_payments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: debt_payments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.debt_payments_id_seq OWNED BY public.debt_payments.id;
+
+
+--
+-- Name: expenses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.expenses (
+    id integer NOT NULL,
+    description character varying(200) NOT NULL,
+    amount double precision NOT NULL,
+    category character varying(80) NOT NULL,
+    expense_date timestamp without time zone NOT NULL,
+    recorded_by integer,
+    created_at timestamp without time zone,
+    department character varying(20) NOT NULL
+);
+
+
+--
+-- Name: expenses_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.expenses_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: expenses_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.expenses_id_seq OWNED BY public.expenses.id;
+
+
+--
+-- Name: mpesa_transactions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mpesa_transactions (
+    id integer NOT NULL,
+    merchant_request_id character varying(100),
+    checkout_request_id character varying(100),
+    result_code integer,
+    result_desc character varying(255),
+    amount double precision,
+    mpesa_receipt_number character varying(100),
+    phone_number character varying(20),
+    transaction_date character varying(50),
+    created_at timestamp without time zone,
+    sender_first_name character varying(100),
+    sender_middle_name character varying(100),
+    sender_last_name character varying(100),
+    linked_transaction_id character varying(100)
+);
+
+
+--
+-- Name: mpesa_transactions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.mpesa_transactions_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mpesa_transactions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.mpesa_transactions_id_seq OWNED BY public.mpesa_transactions.id;
+
+
+--
+-- Name: products; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.products (
+    id integer NOT NULL,
+    name character varying(80) NOT NULL,
+    category character varying(80) NOT NULL,
+    price double precision NOT NULL,
+    unit_price double precision NOT NULL,
+    stock double precision NOT NULL,
+    barcode character varying,
+    sold_loose boolean NOT NULL
+);
+
+
+--
+-- Name: products_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.products_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: products_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.products_id_seq OWNED BY public.products.id;
+
+
+--
+-- Name: sale_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.sale_items (
+    id integer NOT NULL,
+    sale_id integer NOT NULL,
+    product_id integer NOT NULL,
+    name character varying(120) NOT NULL,
+    quantity double precision NOT NULL,
+    price double precision NOT NULL,
+    profit double precision NOT NULL
+);
+
+
+--
+-- Name: sale_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.sale_items_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: sale_items_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.sale_items_id_seq OWNED BY public.sale_items.id;
+
+
+--
+-- Name: sales; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.sales (
+    id integer NOT NULL,
+    transaction_id character varying(100),
+    total_amount double precision NOT NULL,
+    amount_paid double precision NOT NULL,
+    change_given double precision NOT NULL,
+    payment_method character varying(50) NOT NULL,
+    sale_date timestamp without time zone NOT NULL,
+    user_id integer,
+    customer_name character varying(100),
+    customer_phone character varying(20),
+    payment_status character varying(20)
+);
+
+
+--
+-- Name: sales_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.sales_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: sales_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.sales_id_seq OWNED BY public.sales.id;
+
+
+--
+-- Name: suppliers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.suppliers (
+    id integer NOT NULL,
+    name character varying(100) NOT NULL,
+    phone character varying(20) NOT NULL,
+    email character varying(120),
+    address character varying(200),
+    created_at timestamp without time zone
+);
+
+
+--
+-- Name: suppliers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.suppliers_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: suppliers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.suppliers_id_seq OWNED BY public.suppliers.id;
+
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    username character varying(80) NOT NULL,
+    email character varying(80) NOT NULL,
+    password_hash character varying(256) NOT NULL,
+    role character varying(50) NOT NULL,
+    active boolean NOT NULL
+);
+
+
+--
+-- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.users_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
+
+
+--
+-- Name: cash_advances id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cash_advances ALTER COLUMN id SET DEFAULT nextval('public.cash_advances_id_seq'::regclass);
+
+
+--
+-- Name: debt_payments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.debt_payments ALTER COLUMN id SET DEFAULT nextval('public.debt_payments_id_seq'::regclass);
+
+
+--
+-- Name: expenses id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.expenses ALTER COLUMN id SET DEFAULT nextval('public.expenses_id_seq'::regclass);
+
+
+--
+-- Name: mpesa_transactions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mpesa_transactions ALTER COLUMN id SET DEFAULT nextval('public.mpesa_transactions_id_seq'::regclass);
+
+
+--
+-- Name: products id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.products ALTER COLUMN id SET DEFAULT nextval('public.products_id_seq'::regclass);
+
+
+--
+-- Name: sale_items id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sale_items ALTER COLUMN id SET DEFAULT nextval('public.sale_items_id_seq'::regclass);
+
+
+--
+-- Name: sales id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sales ALTER COLUMN id SET DEFAULT nextval('public.sales_id_seq'::regclass);
+
+
+--
+-- Name: suppliers id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.suppliers ALTER COLUMN id SET DEFAULT nextval('public.suppliers_id_seq'::regclass);
+
+
+--
+-- Name: users id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
+
+
+--
+-- Data for Name: alembic_version; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.alembic_version (version_num) FROM stdin;
+1bbbdcf76bc7
+\.
+
+
+--
+-- Data for Name: cash_advances; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.cash_advances (id, person_name, amount, reason, amount_returned, status, department, taken_at, returned_at, recorded_by) FROM stdin;
+\.
+
+
+--
+-- Data for Name: debt_payments; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.debt_payments (id, sale_id, amount, method, paid_at, received_by) FROM stdin;
+8	24	750	cash	2026-05-01 16:59:53.745196	3
+9	86	2910	cash	2026-05-06 09:24:29.760431	3
+\.
+
+
+--
+-- Data for Name: expenses; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.expenses (id, description, amount, category, expense_date, recorded_by, created_at, department) FROM stdin;
+2	Orion paints	5645	Stock	2026-05-01 00:00:00	3	2026-05-01 12:08:10.733019	hardware
+4	Transport of goods && motobike spares stock	8700	Stock	2026-05-02 00:00:00	3	2026-05-02 18:52:55.825454	hardware
+6	Bleu moon hardware material supply	15820	Stock	2026-05-05 00:00:00	3	2026-05-05 17:32:36.24474	hardware
+\.
+
+
+--
+-- Data for Name: mpesa_transactions; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.mpesa_transactions (id, merchant_request_id, checkout_request_id, result_code, result_desc, amount, mpesa_receipt_number, phone_number, transaction_date, created_at, sender_first_name, sender_middle_name, sender_last_name, linked_transaction_id) FROM stdin;
+267	\N	1d38ec77-f863-4fcd-b89a-c7a668b70ac8	0	Received	170	UE16U2HSLA	\N	\N	2026-05-01 13:34:28.967083	Joseph	\N	\N	\N
+268	\N	6ea73d29-4b14-4dd6-9bb2-8c9be249ec1c	0	Received	210	UE1FH2LQ4W	\N	\N	2026-05-01 14:06:41.386229	teresiah	\N	\N	\N
+269	\N	b0b8941e-f155-4940-bc51-9953c7e40600	0	Received	50	UE167349TN	\N	\N	2026-05-01 15:03:56.789531	JOHN	\N	\N	\N
+270	\N	d5e81b03-af2f-48c8-ae34-397ad12ed7d1	0	Received	35	UE1MU2YKBI	\N	\N	2026-05-01 15:07:59.995253	JULIET	\N	\N	\N
+271	\N	384c83a9-4607-4d32-b846-253f502ef93b	0	Received	165	UE1M32EVYJ	\N	\N	2026-05-01 15:18:15.642618	JOSEPH	\N	\N	\N
+272	\N	7de9703e-e0f1-4ed3-8262-dff1394a8d5a	0	Received	5	UE11V2XEPJ	\N	\N	2026-05-01 15:21:56.773505	Teresia	\N	\N	\N
+273	\N	1f0ed1e0-4187-4df0-801b-59afdf8710e8	0	Received	20	UE11V2XG5W	\N	\N	2026-05-01 15:23:15.213231	Teresia	\N	\N	\N
+274	\N	a5c9a573-987d-4c95-aa27-b6e08592b602	0	Received	60	UE11V2XJ5Y	\N	\N	2026-05-01 15:26:21.412249	Teresia	\N	\N	\N
+275	\N	fdeba7c2-5ea0-4091-8496-83e93cf75292	0	Received	1200	UE17G2RC88	\N	\N	2026-05-01 15:56:10.570853	TERESIAH	\N	\N	\N
+276	\N	c9121613-c3a1-4ee8-a47a-b949c5320304	0	Received	30	UE13Z2ZMJ1	\N	\N	2026-05-01 16:01:38.909368	ANN	\N	\N	\N
+277	\N	38622bae-3702-4946-8430-2b25ccd50ba4	0	Received	640	UE1C72JG6P	\N	\N	2026-05-01 16:06:52.67502	EUNICE	\N	\N	\N
+278	\N	53eaca64-a091-474f-a72f-3e5fe6174aa6	0	Received	150	UE1P52FA8G	\N	\N	2026-05-01 16:15:05.858321	KHADIJAH	\N	\N	\N
+279	\N	3cf09a3a-62c4-42ec-9b67-80c15e1feeb6	0	Received	70	UE1AY2MF21	\N	\N	2026-05-01 16:23:59.831212	EUNICE	\N	\N	\N
+280	\N	ea2b5558-75cc-47d7-bde2-d8436b8600f2	0	Received	40	UE1RO2Y0P2	\N	\N	2026-05-01 16:28:56.750712	Samuel	\N	\N	\N
+281	\N	d25c9077-bbb4-481b-9285-988392a8fd15	0	Received	170	UE1F02ZW25	\N	\N	2026-05-01 16:45:09.8469	Benson	\N	\N	\N
+282	\N	d370f04d-5dcb-460b-b8b5-026503ea692e	0	Received	220	UE1F0300SO	\N	\N	2026-05-01 16:51:34.67482	Benson	\N	\N	\N
+283	\N	39c5a7e0-9c8d-46ac-8a21-6c5f0e751310	0	Received	20	UE1CO2Q2E5	\N	\N	2026-05-01 16:53:17.388225	george	\N	\N	\N
+284	\N	4548f2eb-947a-453c-9190-a3c2286e5137	0	Received	20	UE1832WBO4	\N	\N	2026-05-01 17:47:25.898883	Sarah	\N	\N	\N
+285	\N	88af7e3e-3f17-404e-85d3-01440b6c8c53	0	Received	50	UE1JR2TTDZ	\N	\N	2026-05-01 18:06:04.105785	DANIEL	\N	\N	\N
+286	\N	404d0f4d-4a33-4437-a1e7-68d5710a22fd	0	Received	150	UE2QN2RHPV	\N	\N	2026-05-02 04:13:45.994108	LOISE	\N	\N	\N
+287	\N	e8a08999-4dba-422b-b14a-cca96a9d9758	0	Received	170	UE2AY2NMAG	\N	\N	2026-05-02 04:30:26.429159	MARY	\N	\N	\N
+288	\N	98ec56be-1893-4468-81fd-e3e77a50aa63	0	Received	120	UE2DJ2QRNC	\N	\N	2026-05-02 04:57:11.931833	JAMES	\N	\N	\N
+289	\N	159fcc2a-1e12-4b20-81b6-12aabb9cda66	0	Received	35	UE26U2K2SM	\N	\N	2026-05-02 05:10:20.27358	Stanley	\N	\N	\N
+290	\N	eaaf0247-305e-4a28-8e6b-d6e74174fb6a	0	Received	335	UE2QW31TIA	\N	\N	2026-05-02 05:37:43.387612	BEATRICE	\N	\N	\N
+291	\N	09f8a3ac-1020-4cac-9e50-9f3d8893e5fe	0	Received	40	UE2A62TFDZ	\N	\N	2026-05-02 06:17:31.240538	GEORGE	\N	\N	\N
+292	\N	4a4013c6-b1f7-417c-abf6-cccd9ec3f8e1	0	Received	50	UE2AW2YVAM	\N	\N	2026-05-02 06:18:28.182568	Christopher	\N	\N	\N
+293	\N	63a8560c-4aa0-4088-a292-883ecb1af11d	0	Received	30	UE2NI2UHAO	\N	\N	2026-05-02 07:41:43.310137	Esther	\N	\N	\N
+294	\N	9a155976-874b-4726-85a1-c3e8c9530142	0	Received	1070	UE2G92TBU2	\N	\N	2026-05-02 08:12:42.382124	VINCENT	\N	\N	\N
+295	\N	6ec64d75-6047-4424-a791-edbe58da9fdc	0	Received	2100	UE2NP2XVJ5	\N	\N	2026-05-02 09:39:10.38018	DANIEL	\N	\N	\N
+296	\N	a0655189-e33f-4a8d-94db-9d7ccf8a3eac	0	Received	5	UE28E2WABE	\N	\N	2026-05-02 09:59:13.419905	JANE	\N	\N	\N
+297	\N	68d5b154-04f2-4c97-96aa-df6ee455b4e0	0	Received	30	UE2BT2QXIE	\N	\N	2026-05-02 10:05:34.179537	joseph	\N	\N	\N
+298	\N	1dd080fe-3991-4125-bfea-958123f18b0a	0	Received	4570	UE22I2WU9U	\N	\N	2026-05-02 11:03:42.914196	Edwin	\N	\N	\N
+299	\N	a056254b-7143-4ce4-96c1-b03e8b8e63a3	0	Received	90	UE21V3158Z	\N	\N	2026-05-02 12:43:33.883182	Teresia	\N	\N	\N
+300	\N	025aa758-b1d2-4249-a380-65b70bcb0baa	0	Received	230	UE25H2Y9VN	\N	\N	2026-05-02 13:40:47.994037	ALICE	\N	\N	\N
+301	\N	5ced65f1-0ed1-4e1d-bcd8-bef28c7ffe6f	0	Received	10	UE2JQ2FPYJ	\N	\N	2026-05-02 13:45:48.347611	PERIS	\N	\N	\N
+302	\N	bc0b5781-f352-458a-af0a-37ee3d0694d6	0	Received	575	UE2942VWXI	\N	\N	2026-05-02 13:48:22.337316	GLADYS	\N	\N	\N
+303	\N	0f781be6-f662-4c5a-a6c2-6e50a5f87727	0	Received	220	UE2DN2QAR4	\N	\N	2026-05-02 14:20:53.67483	JANNEFER	\N	\N	\N
+304	\N	f7f5f1b5-2ed1-4fa4-a706-931709836128	0	Received	30	UE2052SCO7	\N	\N	2026-05-02 14:22:11.201234	ANASTACIA	\N	\N	\N
+305	\N	264ff46f-8292-40f6-bb13-e424bf2055fb	0	Received	40	UE22E39KIH	\N	\N	2026-05-02 14:22:44.079091	PRISCILLA	\N	\N	\N
+306	\N	0639f8ae-ab55-456e-96d8-bd6d0e49134f	0	Received	200	UE2052S5UL	\N	\N	2026-05-02 14:34:24.967859	ANASTACIA	\N	\N	\N
+307	\N	355db0e0-d7ef-44a9-b2b6-7c631a51a395	0	Received	40	UE2CO2TMYL	\N	\N	2026-05-02 14:45:18.061067	george	\N	\N	\N
+308	\N	fce92010-da24-4e2f-91b4-ef7e5256c197	0	Received	645	UE20Y2TDGK	\N	\N	2026-05-02 14:58:27.9726	MARY	\N	\N	\N
+309	\N	54e7b8ae-277a-4c71-a281-01fc7eb26b46	0	Received	80	UE2C72N4B4	\N	\N	2026-05-02 15:14:11.688685	EUNICE	\N	\N	\N
+310	\N	b336eb02-55e2-4e57-b8e9-3aeb0ad99b26	0	Received	70	UE2C72NCMD	\N	\N	2026-05-02 15:31:41.935927	EUNICE	\N	\N	\N
+311	\N	faaf30ec-08d5-42a2-9f2e-f566a73c8dd2	0	Received	40	UE28A2O0WG	\N	\N	2026-05-02 15:52:19.465505	Magrate	\N	\N	\N
+312	\N	2fc87336-e75a-4342-94e8-7407e61b46e4	0	Received	80	UE2CN2WQG3	\N	\N	2026-05-02 15:56:48.898148	JOSEPH	\N	\N	\N
+313	\N	b42727e3-b48c-4f8d-83ff-f5e0bdf94906	0	Received	30	UE2443BQR3	\N	\N	2026-05-02 16:17:40.678507	David	\N	\N	\N
+314	\N	0ab05bc6-484f-4d50-bdb3-7c34632588fd	0	Received	40	UE2GG2UX9X	\N	\N	2026-05-02 16:32:48.511991	mary	\N	\N	\N
+315	\N	78ffc537-1613-4c42-8511-c37dbac594a3	0	Received	40	UE22E3AARK	\N	\N	2026-05-02 16:32:56.838311	STEPHAN	\N	\N	\N
+316	\N	0f0c4c56-7bfd-489d-a1f0-4477ead68f9a	0	Received	300	UE2EA339GZ	\N	\N	2026-05-02 16:52:36.036949	Agnes	\N	\N	\N
+317	\N	270b144c-b0d7-4c8c-b572-3222fd63431f	0	Received	25	UE2NJ2Z5SR	\N	\N	2026-05-02 16:54:18.412317	GRACE	\N	\N	\N
+318	\N	93d69a5b-a8b0-410d-8f61-742b9b14b247	0	Received	200	UE2EK2TNPG	\N	\N	2026-05-02 16:55:47.338693	ayan	\N	\N	\N
+319	\N	67d12477-5a5f-4ef3-89ed-1c938e2cf8e1	0	Received	60	UE230326HG	\N	\N	2026-05-02 17:00:11.424878	Michael	\N	\N	\N
+320	\N	f8b864cd-9a6d-4ca5-bd31-ec028b0b0dbc	0	Received	75	UE22E3AQZD	\N	\N	2026-05-02 17:16:05.094966	STEPHAN	\N	\N	\N
+321	\N	e3660dec-71ca-414e-9c8c-feb895034068	0	Received	700	UE2OB2XAE5	\N	\N	2026-05-02 17:19:57.783599	NICHOLAS	\N	\N	\N
+322	\N	bf1a1fc7-d7e3-4d36-b3bd-3603ca22e94e	0	Received	30	UE2C72O1NY	\N	\N	2026-05-02 17:23:52.05383	EUNICE	\N	\N	\N
+323	\N	82e60957-4e3f-4256-8689-497d5bfb03af	0	Received	250	UE2M92Q2XX	\N	\N	2026-05-02 17:55:56.321079	Erick	\N	\N	\N
+324	\N	34268f02-4b64-41da-abef-653505e68f98	0	Received	450	UE2NP30JM8	\N	\N	2026-05-02 18:06:12.165186	DANIEL	\N	\N	\N
+325	\N	2e4ad890-0b90-4af6-b7ea-ea3ea6e8c309	0	Received	280	UE2H731524	\N	\N	2026-05-02 18:24:00.530083	AMOS	\N	\N	\N
+326	\N	7f7995d1-3d5d-4e88-b2a2-b3c5ce2c6d12	0	Received	405	UE29N2QNCQ	\N	\N	2026-05-02 18:24:04.407506	PETER	\N	\N	\N
+327	\N	e3b2e8aa-f0b0-4753-b77c-aed7b1268af3	0	Received	45	UE2QX34EMJ	\N	\N	2026-05-02 18:44:09.873412	Antony	\N	\N	\N
+328	\N	3ee897f5-f23e-481e-9afb-46765a2968cd	0	Received	20	UE3A82YT9L	\N	\N	2026-05-03 08:10:52.959167	LYDIA	\N	\N	\N
+329	\N	24aa54e6-1da1-413a-9f08-fa9600a3dd53	0	Received	30	UE3NJ3113U	\N	\N	2026-05-03 08:14:09.983236	GRACE	\N	\N	\N
+330	\N	4689ca64-2468-4097-aef4-63ab7a143ad4	0	Received	15	UE3NJ311BB	\N	\N	2026-05-03 08:26:46.931177	GRACE	\N	\N	\N
+331	\N	ba8a0950-57e0-44a8-8dc3-d585aff1b934	0	Received	125	UE3QJ315FK	\N	\N	2026-05-03 09:11:40.303982	David	\N	\N	\N
+332	\N	fbb8d978-f6de-42a8-8b13-c91c16130225	0	Received	70	UE3O72YK1N	\N	\N	2026-05-03 09:35:25.736528	GILBERTH	\N	\N	\N
+333	\N	81aaa5fe-27d8-4a70-a681-2739f02bcba6	0	Received	120	UE3NU2XITG	\N	\N	2026-05-03 10:04:09.795079	EVANS	\N	\N	\N
+334	\N	6200b95f-fb5f-40e6-9984-deac2651608e	0	Received	20	UE34134HQP	\N	\N	2026-05-03 10:16:30.513017	LUCY	\N	\N	\N
+335	\N	be51c2f1-1b28-40d4-be7c-4ef32bb74fbf	0	Received	135	UE3MT30I6Z	\N	\N	2026-05-03 10:54:04.355548	REGINA	\N	\N	\N
+336	\N	72d575c7-d6e3-47d5-9690-d3722159348a	0	Received	120	UE3QU2TQ8I	\N	\N	2026-05-03 11:03:53.056981	ESTHER	\N	\N	\N
+337	\N	4cd3a156-5bc3-4435-8f43-8341b4638f8c	0	Received	290	UE3O72YTK7	\N	\N	2026-05-03 11:07:24.632708	DAVID	\N	\N	\N
+338	\N	9e80bd2e-d679-4b70-bb9c-e09b5f90caef	0	Received	70	UE37W36CQT	\N	\N	2026-05-03 11:26:57.928442	patrick	\N	\N	\N
+339	\N	446329e5-9fc8-4517-ba22-94d164052288	0	Received	180	UE3AM308H1	\N	\N	2026-05-03 11:39:22.230851	Susan	\N	\N	\N
+340	\N	16d56132-988e-4c61-a9d5-d7c8c604a16a	0	Received	20	UE3O72Z52C	\N	\N	2026-05-03 11:42:27.353123	DAVID	\N	\N	\N
+341	\N	65bdf9c5-4fb4-4420-87f4-408c739da8d2	0	Received	45	UE3IP38R5U	\N	\N	2026-05-03 11:50:51.37249	furaha	\N	\N	\N
+342	\N	5e35f547-aecf-4a4e-bc21-d9ac0e35bef6	0	Received	100	UE3QJ32353	\N	\N	2026-05-03 12:57:12.316957	David	\N	\N	\N
+343	\N	11edbf0e-3c1c-449c-bb40-1bf2aba5364c	0	Received	420	UE3FH2TOQW	\N	\N	2026-05-03 13:16:22.944934	LAURENCE	\N	\N	\N
+344	\N	65e70665-1810-45de-b442-2a688c59ebad	0	Received	110	UE3KK2PZHP	\N	\N	2026-05-03 13:42:37.414029	PETER	\N	\N	\N
+345	\N	a203f67c-2328-47f5-9612-f9a3c7dd08c0	0	Received	200	UE3IN2QT2Q	\N	\N	2026-05-03 13:46:42.378459	simon	\N	\N	\N
+346	\N	c4a2f353-678e-4d45-abb1-6a8df584e9e9	0	Received	35	UE31V35FY4	\N	\N	2026-05-03 13:52:08.652116	Teresia	\N	\N	\N
+347	\N	6b17eda2-902a-4738-ae7a-ae41bb9bb4c9	0	Received	35	UE3EH2Y5TX	\N	\N	2026-05-03 13:55:42.718059	MARY	\N	\N	\N
+348	\N	9917ee95-2348-43bd-88c6-5afaadbbc8a6	0	Received	820	UE3192V24J	\N	\N	2026-05-03 13:58:50.886279	Joyce	\N	\N	\N
+349	\N	07ecf5f6-b030-4d03-82ec-32e8f8759a5c	0	Received	25	UE31V35OYQ	\N	\N	2026-05-03 14:25:54.789058	Teresia	\N	\N	\N
+350	\N	703d8965-6081-430e-b29a-517c16bdbbf9	0	Received	200	UE3M82YQZU	\N	\N	2026-05-03 14:42:32.586636	DAMARIS	\N	\N	\N
+351	\N	25388027-624a-4d6b-b57d-511b8926ccd9	0	Received	440	UE36H2MW1V	\N	\N	2026-05-03 14:42:41.683484	Mercy	\N	\N	\N
+352	\N	b061e40a-17c6-4268-af88-99eb0c0e1bba	0	Received	100	UE3DW325L0	\N	\N	2026-05-03 14:42:55.524398	HANNAH	\N	\N	\N
+353	\N	8f9404ce-0769-4d98-86d8-0fa045cae493	0	Received	45	UE3F739ZFP	\N	\N	2026-05-03 14:48:13.540032	james	\N	\N	\N
+354	\N	b6a8bd9b-1049-44ec-bd3f-4e897f4ae599	0	Received	75	UE3NG3500K	\N	\N	2026-05-03 14:52:23.164958	PENINAH	\N	\N	\N
+355	\N	8295bf06-c2fb-4c27-8dd4-0d1ae5025573	0	Received	70	UE3E53065G	\N	\N	2026-05-03 14:58:11.266498	STEPHEN	\N	\N	\N
+356	\N	b3f46d05-07e4-4411-be55-07a44b5b3fea	0	Received	60	UE39T2YBTO	\N	\N	2026-05-03 15:20:34.442088	Jackson	\N	\N	\N
+357	\N	c98998eb-66a2-49a5-ae4b-cf39834f24e9	0	Received	30	UE3L334C3L	\N	\N	2026-05-03 15:22:40.956741	SARAH	\N	\N	\N
+358	\N	e472a550-d5b3-4abe-a103-7e99624b2439	0	Received	100	UE30Y2XM3A	\N	\N	2026-05-03 15:31:53.727048	leah	\N	\N	\N
+359	\N	ab0f129c-eb32-4212-8498-e32d9439167b	0	Received	330	UE38J308HM	\N	\N	2026-05-03 15:38:00.389934	GEORGE	\N	\N	\N
+360	\N	cbefc261-452c-46b3-829d-7a5416ba3911	0	Received	210	UE3CN30K1P	\N	\N	2026-05-03 15:40:58.206876	JOSEPH	\N	\N	\N
+361	\N	fc17a5a6-f8f5-46be-abea-286b91521ffd	0	Received	40	UE32E3E3XZ	\N	\N	2026-05-03 15:49:26.583136	STEPHAN	\N	\N	\N
+362	\N	6c2a9c6e-3868-4d28-b207-8210c1753abd	0	Received	155	UE3JQ2KD7I	\N	\N	2026-05-03 15:53:12.053107	PERIS	\N	\N	\N
+363	\N	a44755ff-3754-47de-9784-f963ac5f04bf	0	Received	100	UE3Q02QL2Y	\N	\N	2026-05-03 16:08:25.390713	Henry	\N	\N	\N
+364	\N	4bf6ae13-c677-4282-96ad-43a0789615a0	0	Received	150	UE37C2XSVQ	\N	\N	2026-05-03 16:09:56.150065	PAUL	\N	\N	\N
+365	\N	7d8b7df7-cc0b-498c-9d86-b3ea99abbc97	0	Received	110	UE3MG32E05	\N	\N	2026-05-03 16:13:07.818054	John	\N	\N	\N
+366	\N	8c5c7684-2f33-49cb-b4d4-0d43c8e06f35	0	Received	20	UE330364QP	\N	\N	2026-05-03 16:44:40.608595	Michael	\N	\N	\N
+367	\N	681e69fc-842e-4cfc-b39a-3bedd3b1fa9c	0	Received	100	UE3AO2QKA7	\N	\N	2026-05-03 16:44:49.933775	Paul	\N	\N	\N
+368	\N	a429ff7c-78f4-49e8-b4c5-0bfdb059ca90	0	Received	85	UE3A8318GX	\N	\N	2026-05-03 16:49:23.341448	LYDIA	\N	\N	\N
+369	\N	67040126-8898-4fff-be01-a86ac0ff37f6	0	Received	15	UE3CC32B8P	\N	\N	2026-05-03 16:54:17.493269	PETER	\N	\N	\N
+370	\N	5528d721-89e5-44fe-bbcf-635baa7d64cd	0	Received	10	UE3NJ33DS9	\N	\N	2026-05-03 16:55:14.152257	GRACE	\N	\N	\N
+371	\N	2addb356-9ff9-4c42-a033-358755adedc4	0	Received	40	UE3CC32BCH	\N	\N	2026-05-03 16:57:47.583475	PETER	\N	\N	\N
+372	\N	8101bb66-9603-4409-9829-b4f3613d5394	0	Received	80	UE3QA2UBTW	\N	\N	2026-05-03 17:14:19.235482	Alice	\N	\N	\N
+373	\N	e4f8502c-219f-4efb-b4b6-26b9d679ca7d	0	Received	120	UE3A8313F5	\N	\N	2026-05-03 17:14:59.607521	LYDIA	\N	\N	\N
+374	\N	0857d38f-b7ff-43d0-bc9d-60077fd36366	0	Received	20	UE3PU2S8ET	\N	\N	2026-05-03 17:24:51.596031	jackson	\N	\N	\N
+375	\N	806fd2e5-a882-46ed-9454-acacaac61672	0	Received	70	UE3483IPT5	\N	\N	2026-05-03 17:44:25.971131	DAMARIS	\N	\N	\N
+376	\N	f55b45c2-47c6-4086-a1ad-7806d17835e2	0	Received	305	UE3A53FCQP	\N	\N	2026-05-03 17:53:08.823133	IBRAHIM	\N	\N	\N
+377	\N	5cbc0e0d-2368-48a5-8725-e78b4fe82355	0	Received	10	UE3A53FBIT	\N	\N	2026-05-03 17:54:47.022246	IBRAHIM	\N	\N	\N
+378	\N	3de0fe8b-1351-420e-b574-f46a6ae861af	0	Received	30	UE4K1315FE	\N	\N	2026-05-04 04:52:44.775741	Karen	\N	\N	\N
+379	\N	49380c0a-e20d-4af8-afab-8d78885ace58	0	Received	20	UE4H02X87F	\N	\N	2026-05-04 05:41:35.926558	victoria	\N	\N	\N
+380	\N	caf56132-96f8-435d-94a9-e0b39cb76dfc	0	Received	50	UE4K131ANE	\N	\N	2026-05-04 06:04:37.764644	Karen	\N	\N	\N
+381	\N	8a794d60-f093-4730-bd41-71d4eb833c04	0	Received	20	UE4IE36QJ8	\N	\N	2026-05-04 06:26:27.050415	JOSEPH	\N	\N	\N
+382	\N	25bad2ef-d8f7-4e1f-8e3a-57041fe6b727	0	Received	140	UE4363HZW2	\N	\N	2026-05-04 06:56:31.588047	JOHN	\N	\N	\N
+383	\N	93acc5d5-87b4-4b0f-941e-15146fb11261	0	Received	50	UE4MU39B5J	\N	\N	2026-05-04 07:31:44.803256	JULIET	\N	\N	\N
+384	\N	9b2f5f80-36a8-4595-8999-f0ee7010037a	0	Received	60	UE49V2QX03	\N	\N	2026-05-04 07:52:18.666206	marion	\N	\N	\N
+385	\N	b1c0b8db-c53a-4c89-a645-c6a4d78840d5	0	Received	20	UE4DI34PFM	\N	\N	2026-05-04 08:41:02.184549	jackline	\N	\N	\N
+386	\N	fcad7102-7127-4aed-aa7b-4417c3abaf5b	0	Received	30	UE41730E14	\N	\N	2026-05-04 08:43:08.584499	SARAH	\N	\N	\N
+387	\N	a7b0eec7-d0c1-4d4b-8efe-41483bfcf736	0	Received	700	UE4BG37GSQ	\N	\N	2026-05-04 09:00:13.087828	MARGARET	\N	\N	\N
+388	\N	a490ba6e-7c63-432a-874f-e4547bddb573	0	Received	60	UE4HS31JBA	\N	\N	2026-05-04 09:17:50.058242	HASSAN	\N	\N	\N
+389	\N	41dd909b-523d-4cc6-9610-45f79cd0d661	0	Received	100	UE41R33CAX	\N	\N	2026-05-04 10:04:30.936255	PETER	\N	\N	\N
+390	\N	061ccd79-19f6-4499-9570-c9d4688ac79a	0	Received	60	UE4RO38DFC	\N	\N	2026-05-04 10:12:19.302314	Samuel	\N	\N	\N
+391	\N	195d02c6-e55b-48d9-8c88-0741c3d14618	0	Received	25	UE4L337MHY	\N	\N	2026-05-04 11:51:55.403098	SARAH	\N	\N	\N
+392	\N	c2984365-f902-47ae-b689-bd0294962333	0	Received	40	UE4AY2XM0E	\N	\N	2026-05-04 13:13:40.077589	MARY	\N	\N	\N
+393	\N	1fa71894-3af6-4654-ba56-15f8ba6b33ef	0	Received	200	UE43E3IRJF	\N	\N	2026-05-04 13:35:39.943148	JOSEPH	\N	\N	\N
+394	\N	27e7b5d6-c3ac-465e-8303-60755d07055f	0	Received	170	UE4D12ZODN	\N	\N	2026-05-04 13:58:25.092134	ADRIAN	\N	\N	\N
+395	\N	d487f1cf-657a-4aa8-a9a3-5a62d635c2e3	0	Received	70	UE4263CD2Z	\N	\N	2026-05-04 14:39:25.253893	BENARD	\N	\N	\N
+396	\N	975317f4-dfcb-4fa4-8b1b-f650a01b5c74	0	Received	20	UE4HY3BYIF	\N	\N	2026-05-04 15:02:21.551035	Diana	\N	\N	\N
+397	\N	f2ea126c-e28b-4360-96f8-33f9eb6735a9	0	Received	80	UE4C82W5EJ	\N	\N	2026-05-04 15:03:50.31563	Scovia	\N	\N	\N
+398	\N	f7a6dac8-9b90-48eb-9d34-f031fb76126b	0	Received	120	UE4CS2TEW6	\N	\N	2026-05-04 15:32:58.518159	PRISCAH	\N	\N	\N
+399	\N	c7af1065-5785-445a-8668-08aee3075977	0	Received	65	UE4CS2TF41	\N	\N	2026-05-04 15:38:46.499113	PRISCAH	\N	\N	\N
+400	\N	1f80913d-dbcd-4648-8e48-a72fdb8b2785	0	Received	100	UE4IB32MAY	\N	\N	2026-05-04 16:03:30.338359	luvuno	\N	\N	\N
+401	\N	33af9d85-b074-45dd-92b0-769829735e6a	0	Received	1690	UE4BO3782H	\N	\N	2026-05-04 16:14:37.576266	SHARON	\N	\N	\N
+402	\N	b77ac158-fc54-4589-b937-5ba6d7a0706f	0	Received	55	UE403348VL	\N	\N	2026-05-04 16:21:18.626645	Irene	\N	\N	\N
+403	\N	f01137a8-b455-47c4-917e-311fe7f0f753	0	Received	1200	UE45V35ZI0	\N	\N	2026-05-04 16:30:22.28469	ESTHER	\N	\N	\N
+404	\N	a7aafcc2-1698-4f5c-999a-98fa5d4fa3a0	0	Received	30	UE46F3230U	\N	\N	2026-05-04 16:33:30.593444	sarah	\N	\N	\N
+405	\N	7f0eca9f-a50b-4cad-a9c8-e7f9c77904c0	0	Received	20	UE49Q35IRY	\N	\N	2026-05-04 16:33:53.342483	Loise	\N	\N	\N
+406	\N	7574d66d-c9a9-4a74-b7b6-ec3fe43dd99e	0	Received	1380	UE4EZ3DCRZ	\N	\N	2026-05-04 16:54:52.41857	Robert	\N	\N	\N
+407	\N	1c4c9378-1dbc-42aa-9905-b246c49cea3f	0	Received	60	UE4GS35LTK	\N	\N	2026-05-04 16:59:43.19235	Mary	\N	\N	\N
+408	\N	55f99f17-abdf-45ed-bfb1-708f4fa1b4e6	0	Received	30	UE4AY2YXJJ	\N	\N	2026-05-04 17:02:44.196023	EUNICE	\N	\N	\N
+409	\N	8d9329b4-23ea-4818-b539-8b4ea1eebf0e	0	Received	60	UE4CJ33JJV	\N	\N	2026-05-04 17:05:41.42812	MATHEW	\N	\N	\N
+410	\N	ed028f51-2912-4f2e-903f-50548fe2acd1	0	Received	10	UE4R33932H	\N	\N	2026-05-04 17:11:05.915991	everline	\N	\N	\N
+411	\N	4b3d855a-d4ad-467e-9949-759d6923e29e	0	Received	40	UE4EG3BGRB	\N	\N	2026-05-04 17:19:37.617197	PETER	\N	\N	\N
+412	\N	d7e1d0ef-4bfb-4c20-a5e8-acb82b834c8a	0	Received	120	UE4LJ3FTCR	\N	\N	2026-05-04 18:22:13.682987	Evaline	\N	\N	\N
+413	\N	7fef0475-fb31-4279-95e5-6e2f41db3e64	0	Received	30	UE50Y33KNQ	\N	\N	2026-05-05 05:21:51.08279	HUMPHREY	\N	\N	\N
+414	\N	765f8a37-8166-4e20-b171-fd21d4b3466d	0	Received	100	UE5B235BHB	\N	\N	2026-05-05 05:45:50.852444	peter	\N	\N	\N
+415	\N	92cc7c8f-01a9-4853-8d23-0ef60c720aae	0	Received	270	UE5C82Y1LF	\N	\N	2026-05-05 05:49:22.167608	JOYCE	\N	\N	\N
+416	\N	d3f373a6-4d92-448e-bc5d-d851b1943c65	0	Received	100	UE5403CU7P	\N	\N	2026-05-05 05:58:45.741443	ANN	\N	\N	\N
+417	\N	a36c6e06-8ead-475e-b939-2787453ee3ca	0	Received	170	UE5FH30HE7	\N	\N	2026-05-05 07:41:53.531233	teresiah	\N	\N	\N
+418	\N	015a7bcf-87ea-403e-b477-866098d1a771	0	Received	680	UE5O33KTY6	\N	\N	2026-05-05 08:16:59.17279	geofrey	\N	\N	\N
+419	\N	66b6e020-a61b-448d-be73-b49eb6f70189	0	Received	130	UE5O33KSJP	\N	\N	2026-05-05 08:18:47.288667	geofrey	\N	\N	\N
+420	\N	139c843b-b4f8-4687-bffb-0df4886618a0	0	Received	10	UE5HS35OUV	\N	\N	2026-05-05 09:00:19.635071	HASSAN	\N	\N	\N
+421	\N	baa9c0a2-7a4e-457e-9d5c-c19419b0eed3	0	Received	20	UE58A2YTRM	\N	\N	2026-05-05 10:04:17.476186	Jackline	\N	\N	\N
+422	\N	85cf97aa-f969-4192-a7b4-ca5007f3991a	0	Received	55	UE5EE3621W	\N	\N	2026-05-05 10:11:56.801523	RACHAEL	\N	\N	\N
+423	\N	a189a8d5-1f27-4015-bfba-b7a1339cd9a8	0	Received	5	UE50Y34UIK	\N	\N	2026-05-05 11:14:09.929776	HUMPHREY	\N	\N	\N
+424	\N	a682cffd-4587-4322-9b26-afb222b87a44	0	Received	700	UE53S3DSRI	\N	\N	2026-05-05 12:05:42.132555	ANN	\N	\N	\N
+425	\N	869ec293-e2f2-4918-9d5b-7a9a046409e3	0	Received	75	UE5HS36F4B	\N	\N	2026-05-05 12:35:13.243947	HASSAN	\N	\N	\N
+426	\N	dc995f45-149a-4535-b16a-c140b5668851	0	Received	20	UE5IX374S5	\N	\N	2026-05-05 13:21:55.017274	EPHANTUS	\N	\N	\N
+427	\N	f45aa4f5-a235-456a-bbba-71cf53c35c2b	0	Received	860	UE50Y35MWN	\N	\N	2026-05-05 14:31:27.965693	MARY	\N	\N	\N
+428	\N	b763e7f5-f28b-4094-aa55-85bfb58dcfbd	0	Received	30	UE5363O32Q	\N	\N	2026-05-05 14:53:53.891606	JOHN	\N	\N	\N
+429	\N	76fc1edd-72fc-4d57-b2a7-2bd469c1395a	0	Received	200	UE57G37K8F	\N	\N	2026-05-05 15:01:27.980104	TERESIAH	\N	\N	\N
+430	\N	feff2ddf-1503-4f6a-bf0a-a4604304dcda	0	Received	100	UE58Z35ODC	\N	\N	2026-05-05 15:06:37.909213	JANE	\N	\N	\N
+431	\N	4abc73f3-7e39-42e4-b7db-2f04ecde62c5	0	Received	60	UE51V3E6K0	\N	\N	2026-05-05 15:11:36.418944	Teresia	\N	\N	\N
+432	\N	b6898f44-c72e-41d3-b3a9-78be5dbe7c5f	0	Received	100	UE59V2WWLS	\N	\N	2026-05-05 15:15:25.02449	marion	\N	\N	\N
+433	\N	a7d13519-304a-4cc1-8cec-875e6ceb3d87	0	Received	110	UE5HP33NBJ	\N	\N	2026-05-05 15:30:41.293359	PERIS	\N	\N	\N
+434	\N	6d753c7e-c7c4-4d5b-b615-f29d51c7abd5	0	Received	290	UE5CL3C1L3	\N	\N	2026-05-05 16:14:55.670908	Josephine	\N	\N	\N
+435	\N	21304ac2-2e27-4c48-96bc-514282d582f7	0	Received	60	UE5CN3988J	\N	\N	2026-05-05 16:26:11.339038	JOSEPH	\N	\N	\N
+436	\N	475d82e0-0d5b-4762-b939-f87ca68308e8	0	Received	140	UE59N327GS	\N	\N	2026-05-05 16:38:10.68484	PETER	\N	\N	\N
+437	\N	95308e0a-e737-4bee-87d7-d03d9ed6328e	0	Received	10	UE5GG37GQR	\N	\N	2026-05-05 16:52:30.918024	mary	\N	\N	\N
+438	\N	b58100a9-88e7-41ca-a525-dce815397e0e	0	Received	90	UE5H034KC2	\N	\N	2026-05-05 17:11:39.868064	victoria	\N	\N	\N
+439	\N	99c7d912-fb64-4a67-a68c-46bd670b52c6	0	Received	90	UE54T3IXU4	\N	\N	2026-05-05 17:13:22.691874	Teresiah	\N	\N	\N
+440	\N	d7f6268c-d831-425a-84aa-3a30a93fe6d6	0	Received	230	UE5AV3BA91	\N	\N	2026-05-05 17:14:51.801483	peter	\N	\N	\N
+441	\N	03c22690-2d6c-49e5-9d81-4018264c8b4a	0	Received	170	UE5QC39YWM	\N	\N	2026-05-05 17:20:44.948485	James	\N	\N	\N
+442	\N	dc0ff821-c508-431a-a007-11793644da75	0	Received	1100	UE5RB38YHD	\N	\N	2026-05-05 17:30:45.781117	EZRA	\N	\N	\N
+443	\N	de25aa77-c68a-4bae-9e49-da05d95e8fa9	0	Received	10	UE50535SQ9	\N	\N	2026-05-05 17:44:35.151617	TERESIAH	\N	\N	\N
+444	\N	9ed30917-5794-4c51-a5d8-824f20da7c6e	0	Received	150	UE5FH33EDQ	\N	\N	2026-05-05 17:57:54.168143	teresiah	\N	\N	\N
+445	\N	95d42c4c-5e71-40a7-a10d-7be894611710	0	Received	10	UE6AW3EVRT	\N	\N	2026-05-05 21:19:02.521797	Christopher	\N	\N	\N
+446	\N	31398756-5dbf-45df-953a-7c445a81fd68	0	Received	40	UE6LJ3KO81	\N	\N	2026-05-06 04:18:05.813009	Evaline	\N	\N	\N
+447	\N	c430f59b-3478-4fa3-8740-dfd763d9c489	0	Received	150	UE6EW3DEK7	\N	\N	2026-05-06 05:12:57.369691	Esther	\N	\N	\N
+448	\N	c6d9bf3a-af00-40b1-bb85-f7d372bb9c62	0	Received	20	UE6B73BVB3	\N	\N	2026-05-06 05:23:12.433798	Alice	\N	\N	\N
+449	\N	23302385-97d6-4c49-9da5-8051dcbd26ad	0	Received	10	UE60Y37VX4	\N	\N	2026-05-06 05:25:22.425432	HUMPHREY	\N	\N	\N
+450	\N	09288f73-c892-48e6-a389-a7e6cbdd159e	0	Received	330	UE6RM2THT3	\N	\N	2026-05-06 06:12:21.257576	PETER	\N	\N	\N
+451	\N	68a92434-6e7e-4a7e-9f99-6f7dce954fe2	0	Received	100	UE64T3K5SI	\N	\N	2026-05-06 06:23:58.01595	Teresiah	\N	\N	\N
+452	\N	1d73ea1e-9437-4c52-8952-3593b4e94987	0	Received	20	UE6MR3BN37	\N	\N	2026-05-06 06:24:43.052137	sharon	\N	\N	\N
+453	\N	fe2245dd-ab79-4ae3-80b2-ee7c97e818ae	0	Received	375	UE6LF388OG	\N	\N	2026-05-06 07:00:04.166163	Antony	\N	\N	\N
+454	\N	52f8b300-8b10-43ab-9687-78e444bc9a7f	0	Received	40	UE6K430484	\N	\N	2026-05-06 07:00:05.391877	BOBBIEANN	\N	\N	\N
+455	\N	0335535d-b04f-4c15-9485-00e8c9fe309d	0	Received	20	UE68A32DDP	\N	\N	2026-05-06 07:32:34.270333	Jackline	\N	\N	\N
+456	\N	db965a58-a05a-4f04-a611-c5888f539d7a	0	Received	200	UE64E3QRKA	\N	\N	2026-05-06 07:49:40.554212	Elijah	\N	\N	\N
+457	\N	e9ab3ccc-4a7a-4081-aa01-b3e074e0e68f	0	Received	270	UE6PW3B3FJ	\N	\N	2026-05-06 09:11:26.317911	joseph	\N	\N	\N
+458	\N	6575a39f-6cea-4350-889a-1c039a4a9249	0	Received	135	UE64T3LFBS	\N	\N	2026-05-06 11:15:50.025525	Teresiah	\N	\N	\N
+459	\N	f0d5bb68-21c2-4673-8812-081461a75d69	0	Received	30	UE60538AAS	\N	\N	2026-05-06 12:18:30.385876	ANASTACIA	\N	\N	\N
+460	\N	2eb70a77-fc8e-4c8a-9597-5c4717ec388d	0	Received	10	UE6FW3C2KA	\N	\N	2026-05-06 12:27:31.404574	Margaret	\N	\N	\N
+461	\N	c3ddd2a3-d3dc-4c7b-95a4-da710537e702	0	Received	40	UE64T3LIU3	\N	\N	2026-05-06 12:37:31.503929	Teresiah	\N	\N	\N
+462	\N	877828c6-3625-40a9-9019-13b0ed9bc762	0	Received	100	UE6MU3J5FZ	\N	\N	2026-05-06 12:50:43.446069	NANCY	\N	\N	\N
+463	\N	16d7474d-a36d-4e41-8c1a-824c25c3be39	0	Received	50	UE6MU3J8J1	\N	\N	2026-05-06 12:53:16.9031	NANCY	\N	\N	\N
+464	\N	7b0af07d-ef00-4cfa-a4d9-187230bc5386	0	Received	200	UE6N23BNEG	\N	\N	2026-05-06 14:12:01.292408	PRISCILLA	\N	\N	\N
+465	\N	4ccad210-4e2b-46f1-a631-8aee63b62f88	0	Received	1945	UE69P3HO1Y	\N	\N	2026-05-06 14:12:33.715422	PHILIS	\N	\N	\N
+466	\N	26be2abe-d7a6-4a17-b3fa-c99601976af2	0	Received	55	UE6QK37Q2C	\N	\N	2026-05-06 14:37:27.083353	Agnes	\N	\N	\N
+467	\N	9189a443-fc47-4614-ae47-314fd62ff274	0	Received	1100	UE68V3M3W9	\N	\N	2026-05-06 14:46:33.546069	GIDEON	\N	\N	\N
+468	\N	ee5bb316-79db-49f7-aa72-97a1ec11dfda	0	Received	40	UE61V3ICCE	\N	\N	2026-05-06 14:49:40.115123	Teresia	\N	\N	\N
+469	\N	75be33ef-51ff-4fa7-92b0-7f9f31addf73	0	Received	2335	UE6RH3C3P9	\N	\N	2026-05-06 15:26:02.996045	LILIAN	\N	\N	\N
+470	\N	8b120978-8bd6-4f28-ba12-d7fffc4d3ec7	0	Received	30	UE62E3QSRE	\N	\N	2026-05-06 15:32:07.388198	STEPHAN	\N	\N	\N
+471	\N	39fb1eab-2a48-4201-8bfd-19e0723a1d54	0	Received	250	UE6RH3C9DT	\N	\N	2026-05-06 15:47:06.765629	LILIAN	\N	\N	\N
+472	\N	6ca6c0b5-1588-4e83-b74b-0e5a3b8c2409	0	Received	30	UE6363ST87	\N	\N	2026-05-06 15:54:38.123725	JOHN	\N	\N	\N
+473	\N	85ec00fc-4f17-49da-be4c-8d4fde3496f8	0	Received	10	UE6GG3BFU1	\N	\N	2026-05-06 16:20:31.029031	mary	\N	\N	\N
+474	\N	886abc97-b6af-4d1d-857d-0e04b3c18c77	0	Received	40	UE6RC3DIV9	\N	\N	2026-05-06 16:25:22.898176	MARY	\N	\N	\N
+475	\N	df038cfa-eb63-4402-9323-35942532bf57	0	Received	20	UE6QB3666J	\N	\N	2026-05-06 16:26:38.890252	Ann	\N	\N	\N
+476	\N	3605d6de-f086-4008-8535-07806348b3e7	0	Received	80	UE6RM2WCLB	\N	\N	2026-05-06 16:45:55.372188	PETER	\N	\N	\N
+477	\N	2c04a0c7-b074-4889-89ff-d6bbb42dec6f	0	Received	170	UE6F03L4NE	\N	\N	2026-05-06 16:46:34.741124	Benson	\N	\N	\N
+478	\N	f6bf313c-3ebf-4353-a5d8-9e1177b5b9d5	0	Received	170	UE6F03L3DA	\N	\N	2026-05-06 16:48:16.047562	Benson	\N	\N	\N
+479	\N	3aded660-9885-4001-84c2-a0cce4f77a3b	0	Received	150	UE6JJ3732B	\N	\N	2026-05-06 16:48:58.872263	Lucy	\N	\N	\N
+480	\N	b423aa98-db1f-421e-be0d-6ecd19110a78	0	Received	150	UE6833GXNY	\N	\N	2026-05-06 16:54:39.053407	Sarah	\N	\N	\N
+481	\N	e5f18e9f-535c-4b0f-bc5a-67bd1a82391b	0	Received	60	UE68X3D886	\N	\N	2026-05-06 16:58:09.029048	MAURICE	\N	\N	\N
+482	\N	ab497c7e-9e65-4ad7-8a56-f78556d56720	0	Received	60	UE6LB36AS4	\N	\N	2026-05-06 17:02:24.684715	DAVID	\N	\N	\N
+483	\N	bab7ab3f-5fb8-486e-b533-945ad0f60057	0	Received	20	UE68V3N53Z	\N	\N	2026-05-06 17:24:16.80387	GIDEON	\N	\N	\N
+484	\N	5f53ccac-cb0d-4633-8544-09bb79b7d623	0	Received	100	UE6P13AG94	\N	\N	2026-05-06 17:33:29.699292	JOSEPHT	\N	\N	\N
+485	\N	9175e0f9-d76c-4de3-a51f-04cb52a72ce4	0	Received	140	UE6QC3EM6C	\N	\N	2026-05-06 18:07:51.093676	James	\N	\N	\N
+486	\N	915261d3-bb57-4f04-b2b7-eb27aa2c8c7b	0	Received	75	UE6BT3A0FN	\N	\N	2026-05-06 18:08:23.588704	joseph	\N	\N	\N
+487	\N	57922407-f25c-4de7-8884-6e50768c26eb	0	Received	15	UE7NB30ROL	\N	\N	2026-05-07 04:20:31.927702	Cecilia	\N	\N	\N
+488	\N	a16feb44-6eb3-444f-9ace-d3a281d36552	0	Received	90	UE7B93IS0T	\N	\N	2026-05-07 05:25:36.449707	margaret	\N	\N	\N
+489	\N	8619a666-9e0f-4c58-b028-12ffa415708a	0	Received	160	UE7D13AOBG	\N	\N	2026-05-07 06:07:10.092422	BEATRICE	\N	\N	\N
+490	\N	9af18ccf-7070-4453-a5eb-74dce840dd3d	0	Received	110	UE7IB3D2YJ	\N	\N	2026-05-07 06:43:29.944067	luvuno	\N	\N	\N
+491	\N	5bd1be6f-bdcb-4a8f-a413-80b87439b02b	0	Received	50	UE7GO33BS0	\N	\N	2026-05-07 07:24:57.281975	Erick	\N	\N	\N
+492	\N	5b80c366-c72c-44a8-b1aa-07b86d475d3b	0	Received	20	UE79Q3FTOM	\N	\N	2026-05-07 08:06:24.45094	Loise	\N	\N	\N
+493	\N	33a92e65-fe08-44be-b50a-7967a3c0e47f	0	Received	50	UE7B63JH9B	\N	\N	2026-05-07 10:18:15.241585	PAUL	\N	\N	\N
+\.
+
+
+--
+-- Data for Name: products; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.products (id, name, category, price, unit_price, stock, barcode, sold_loose) FROM stdin;
+57	shower rose	Hardware & Utilities	150	60	10	\N	f
+63	Gloves	Hardware & Utilities	250	200	3	\N	f
+65	pk 4way extension	Hardware & Utilities	250	170	3	\N	f
+67	Led 2fts diffuse	Hardware & Utilities	350	200	2	\N	f
+68	Intelligent bulb rechargable 7w	Hardware & Utilities	250	180	5	\N	f
+69	Jb big	Hardware & Utilities	100	70	24	\N	f
+5	3 way circular box	Hardware & Utilities	20	12	44	\N	f
+6	Meter Box 13*13	Hardware & Utilities	1500	1300	2	\N	f
+7	Adaptor Box 85*85	Hardware & Utilities	150	100	3	\N	f
+8	Adaptor Box 100*100	Hardware & Utilities	200	150	1	\N	f
+9	Adaptor Box 150*150	Hardware & Utilities	450	300	3	\N	f
+11	T/socket Windsor	Hardware & Utilities	300	250	1		f
+12	FloodSwitch yomy 50wts	Hardware & Utilities	750	650	2	\N	f
+13	PhotoCell Zideon	Hardware & Utilities	800	550	2	\N	f
+14	Motion Sensor Windsor	Hardware & Utilities	850	748	1	\N	f
+15	Earth Rod Slim 4fts	Hardware & Utilities	450	300	4	\N	f
+16	Earth Rods big 4fts	Hardware & Utilities	426	300	2	\N	f
+17	4 way circular box	Hardware & Utilities	20	12	20	\N	f
+18	S/socket HighAstra	Hardware & Utilities	150	90	10	\N	f
+10	T/socket HIghAstra	Hardware & Utilities	200	160	5	3141444227472	f
+19	s/s Windsor	Hardware & Utilities	180	140	8	\N	f
+20	2way mainless consumer	Hardware & Utilities	450	350	3	\N	f
+21	4way mainless consumer	Hardware & Utilities	650	550	2	\N	f
+22	1gang highAstra	Hardware & Utilities	100	60	8	\N	f
+24	1gang windsor	Hardware & Utilities	120	85	0	\N	f
+25	1gang tronic	Hardware & Utilities	130	95	4	\N	f
+26	t/socket tronic	Hardware & Utilities	450	300	5	\N	f
+27	2gang windsor	Hardware & Utilities	150	120	10	\N	f
+28	2gang tronic	Hardware & Utilities	250	160	10	\N	f
+29	3gang windsor	Hardware & Utilities	200	150	10	\N	f
+30	shower horizon	Hardware & Utilities	1100	850	1	\N	f
+31	chicken bulb	Hardware & Utilities	500	350	2	\N	f
+32	Tv guard	Hardware & Utilities	600	450	1	\N	f
+33	Fridge guard	Hardware & Utilities	600	450	2	\N	f
+34	s/cutout  Hgmemorious	Hardware & Utilities	500	350	3	\N	f
+35	T/cutout grey	Hardware & Utilities	600	450	4	\N	f
+37	T/clips 8mm	Hardware & Utilities	80	50	2	\N	f
+38	T/clips 12mm	Hardware & Utilities	100	60	4	\N	f
+39	snake lights 10m	Hardware & Utilities	750	600	2	\N	f
+40	Ball fitting	Hardware & Utilities	400	300	5	\N	f
+41	20wts rechargable afrilighting	Hardware & Utilities	250	200	5	\N	f
+42	4way distribution box	Hardware & Utilities	1500	1100	2	\N	f
+43	6way distribution box	Hardware & Utilities	2000	1500	2	\N	f
+44	gotv aerial	Hardware & Utilities	500	380	2	\N	f
+45	Vellmax 9w 3 in 1	Hardware & Utilities	150	120	10	\N	f
+46	BedSwitch	Hardware & Utilities	120	80	10	\N	f
+47	Dplight ovalhead	Hardware & Utilities	350	250	5	\N	f
+48	Dplight roundhead	Hardware & Utilities	350	250	5	\N	f
+49	Floodlight vellmax 30wts	Hardware & Utilities	800	600	3	\N	f
+50	Floodlight yomy 30wts	Hardware & Utilities	650	450	2	\N	f
+51	Din rail	Hardware & Utilities	150	80	10	\N	f
+52	T/socket metal	Hardware & Utilities	650	500	3	\N	f
+53	s/socket metal	Hardware & Utilities	550	450	4	\N	f
+54	TOp plug highastra	Hardware & Utilities	100	70	17	\N	f
+55	Top plug kaihong	Hardware & Utilities	70	35	20	\N	f
+70	Handsaw 16" Knicker	Hardware & Utilities	300	230	3	\N	f
+72	Tile cutter (pen)	Hardware & Utilities	200	130	5	\N	f
+73	Gully traps	Hardware & Utilities	150	90	5	\N	f
+74	Handsaw 16" metal	Hardware & Utilities	350	280	1	\N	f
+75	Slasher	Hardware & Utilities	300	200	3	\N	f
+76	pvc cutter Oushida	Hardware & Utilities	450	350	1	\N	f
+77	silicon gun	Hardware & Utilities	350	250	4	\N	f
+78	Adjustable Oushida 8"	Hardware & Utilities	300	180	2	\N	f
+80	Pipe wrench 8"	Hardware & Utilities	350	200	1	\N	f
+81	Pipe wrench 10"	Hardware & Utilities	450	300	2	\N	f
+82	pipe wrench 12"	Hardware & Utilities	450	320	1	\N	f
+83	pipe wrench 14"	Hardware & Utilities	550	400	1	\N	f
+62	Steel Nails 4"	Hardware & Utilities	10	3.75	76	\N	f
+64	Juakali Hammer	Hardware & Utilities	300	220	4	\N	f
+23	2gang highastra	Hardware & Utilities	120	70	8	\N	f
+36	T/clips 10mm	Hardware & Utilities	90	55	1	156761357135	f
+56	Torch	Hardware & Utilities	300	200	9	455678768	f
+79	Adjustable Oushida 10"	Hardware & Utilities	400	260	0	\N	f
+4	Tester	Hardware & Utilities	50	35	12	\N	f
+66	Led 4fts diffuse	Hardware & Utilities	450	300	0	\N	f
+84	cable strippers pliers	Hardware & Utilities	350	180	4	\N	f
+85	bick lock	Hardware & Utilities	250	180	3	\N	f
+86	pvc pipe cutter 8"	Hardware & Utilities	350	290	2	\N	f
+60	Steel Nails 1"	Hardware & Utilities	5	1.27	22	2423344	f
+61	steel Nails 2.5"	Hardware & Utilities	5	3.01	43	65535353535	f
+87	pvc pipe cutter  9"	Hardware & Utilities	400	350	2	\N	f
+91	t/switch box (black)	Hardware & Utilities	50	20	16	\N	f
+94	Nails 5"	Hardware & Utilities	200	150	22	\N	f
+134	Brush 4"	Hardware & Utilities	100	75	14	3456753	f
+95	U-nails	Hardware & Utilities	200	150	22.6	\N	f
+59	Steel Nails 3"	Hardware & Utilities	5	3.44	204	1325415414	f
+101	Nails 5"	Hardware & Utilities	200	123	22.45	\N	f
+108	Trunking	Hardware & Utilities	110	85	9	\N	f
+98	Nails 2.5"	Hardware & Utilities	200	116	43.9	\N	f
+128	Solix lock	Hardware & Utilities	100	56.67	4	\N	f
+109	Conduct pipe 20mm	Hardware & Utilities	100	70	26	\N	f
+58	Steel Nails 2"	Hardware & Utilities	5	3	33	23354354	f
+110	S/switch box white	Hardware & Utilities	20	12	44	\N	f
+112	Couplers 20mm	Hardware & Utilities	7	5	20	\N	f
+100	Nails 1'	Hardware & Utilities	200	116	21.97	\N	f
+71	Floortrap	Hardware & Utilities	250	180	11	\N	f
+88	Artist brush set	Hardware & Utilities	200	130	1	\N	f
+89	ventillations	Hardware & Utilities	100	70	6	\N	f
+90	S/switch box (black)	Hardware & Utilities	30	12	27	3345455646466	f
+113	Red oxide	Hardware & Utilities	250	212	18.4	\N	f
+93	Oxygen free cable	Hardware & Utilities	20	5.89	235	\N	f
+99	nails 1.5"	Hardware & Utilities	200	116	23.05	\N	f
+105	PR-Royals s/socket	Hardware & Utilities	100	70	6	\N	f
+107	Rollinson extra lock	Hardware & Utilities	200	150	0	\N	f
+111	T/switch box white	Hardware & Utilities	30	20	27	\N	f
+92	Handcrafted sheni	Hardware & Utilities	150	100	6	578854	f
+97	Ceiling nails	Hardware & Utilities	250	160	24.2	\N	f
+133	Hartex tubes	Hardware & Utilities	250	200	5	\N	f
+114	Kevin cable black 2.5mm	Hardware & Utilities	2750	2250	2	\N	f
+116	Fei Huan padlock	Hardware & Utilities	300	200	0	\N	f
+118	Adaptor socket 3/4 female	Hardware & Utilities	40	28	27	\N	f
+119	B.b axle	Hardware & Utilities	120	90	9	\N	f
+120	B.b cups	Hardware & Utilities	120	90	8	\N	f
+121	MTB front folk	Hardware & Utilities	650	480	1	\N	f
+122	Fork fitting	Hardware & Utilities	200	135	3	\N	f
+123	Motion sensor	Hardware & Utilities	800	550	3	\N	f
+124	Evin 2.5mm	Hardware & Utilities	90	78	35	\N	f
+125	20l premier	Hardware & Utilities	2100	1500	0	\N	f
+127	Tack nails 1/2	Hardware & Utilities	130	90	2	6903248020073	f
+126	Tack nails 5/8	Hardware & Utilities	130	90	2	6903248020059	f
+106	Manson spoon big	Hardware & Utilities	130	80	4	4546777	f
+130	Manson spoon medium	Hardware & Utilities	120	70	5	\N	f
+131	Manson spoon small	Hardware & Utilities	100	50	4	\N	f
+132	Bodex 200g	Hardware & Utilities	100	70	4	\N	f
+129	Tape measure 5m	Hardware & Utilities	150	100	2	\N	f
+140	Waste pipe 4" white	Hardware & Utilities	1000	780	5	\N	f
+139	Waste pipe 3"	Hardware & Utilities	450	360	10	33646545454545	f
+148	Waste tee 1/1/2	Hardware & Utilities	60	40	10	\N	f
+135	Horse pipe 1/2 * 60ft	Hardware & Utilities	700	480	0	346464664654	f
+151	Spade	Hardware & Utilities	450	310	2	\N	f
+104	Nails 2"	Hardware & Utilities	200	150	32.8	\N	f
+136	Waste pipe brown	Hardware & Utilities	1100	950	5.5	467864	f
+102	Nails 3"	Hardware & Utilities	200	155	32.1	2736474	f
+115	Blade sandflex	Hardware & Utilities	100	70	12	\N	f
+96	Roofing Nails	Hardware & Utilities	200	162	30.15	\N	f
+117	Ppr pipe 3/4	Hardware & Utilities	250	180	15	\N	f
+103	Nails 4"	Hardware & Utilities	200	160	38	35567	f
+156	star screw driver short	Hardware & Utilities	100	50	2	\N	f
+157	flat screw driver short	Hardware & Utilities	100	50	2	\N	f
+159	flat screw driver long	Hardware & Utilities	100	70	4	\N	f
+158	star screw driver long	Hardware & Utilities	100	70	1	\N	f
+154	mason ropes	Hardware & Utilities	50	30	6	\N	f
+152	Rear Axle normal	Hardware & Utilities	70	42.5	9	5464557776	f
+153	Hub cups kidride	Hardware & Utilities	20	12.5	70	\N	f
+155	Steel spoon 7"	Hardware & Utilities	200	100	2	\N	f
+137	Waste pipe 1/1/2	Hardware & Utilities	320	230	5.5	\N	f
+138	Waste pipe 2"	Hardware & Utilities	400	290	1	\N	f
+141	Tangit 250ml	Hardware & Utilities	500	410	2	\N	f
+142	R-6	Hardware & Utilities	200	140	6	\N	f
+143	4-way floor trap	Hardware & Utilities	350	220	3	232425	f
+149	D-bar 10	Hardware & Utilities	850	800	5	\N	f
+150	Binding wire	Hardware & Utilities	180	144.44	13	1324312231	f
+160	4l Signal Orion	Hardware & Utilities	900	780	1	\N	f
+209	metal grey primer 1l	Hardware & Utilities	300	250	3	\N	f
+162	Hartex tyres heavy	Hardware & Utilities	750	700	2	\N	f
+185	Drawer handles brass 4"	Hardware & Utilities	70	55	16	\N	f
+164	Bodex 300g	Hardware & Utilities	150	85	3	\N	f
+210	metal grey primer 0.5l	Hardware & Utilities	200	150	2	\N	f
+166	Claw bar medium	Hardware & Utilities	600	400	2	\N	f
+167	Claw bar big	Hardware & Utilities	700	500	3	\N	f
+145	waste bend 4"  90	Hardware & Utilities	120	85	3	\N	f
+169	saddle clips 4"	Hardware & Utilities	25	15	17	243546576786	f
+170	Hex key sets Oushida	Hardware & Utilities	300	150	1	\N	f
+171	Tangit 50ml	Hardware & Utilities	250	145	0	\N	f
+172	Cutting disk	Hardware & Utilities	200	130	6	\N	f
+173	Silicon silant	Hardware & Utilities	250	170	11	\N	f
+174	Grinding disk	Hardware & Utilities	200	150	7	\N	f
+175	Conta glue 200ml	Hardware & Utilities	150	100	5	\N	f
+176	Conta glue 300ml	Hardware & Utilities	200	150	5	\N	f
+177	Borex 300g	Hardware & Utilities	150	85	3	\N	f
+178	Borex 200g	Hardware & Utilities	100	70	4	\N	f
+179	Backnut 1"	Hardware & Utilities	60	30	15	\N	f
+180	Backnut 3/4	Hardware & Utilities	50	25	16	\N	f
+181	Backnut 1/2	Hardware & Utilities	40	20	17	\N	f
+182	Long thread 1"	Hardware & Utilities	80	40	9	\N	f
+183	Longthread 3/4	Hardware & Utilities	60	30	9	\N	f
+184	Long thread 1/2	Hardware & Utilities	50	25	7	\N	f
+186	Drawer handles black 4"	Hardware & Utilities	70	55	10	\N	f
+187	Drawer handle silver 4"	Hardware & Utilities	70	55	10	\N	f
+188	Hanson weight scale 150kg	Hardware & Utilities	2800	2450	2	\N	f
+189	Fagio big	Hardware & Utilities	100	75	13	\N	f
+200	Tube H17	Hardware & Utilities	250	160	5	\N	f
+191	Tube 1/1/2 * 1	Hardware & Utilities	580	530	6	\N	f
+201	Handle lever Bm	Hardware & Utilities	150	80	5	\N	f
+190	Fagio small	Hardware & Utilities	50	40	14	\N	f
+194	Maisha mabati 2m	Hardware & Utilities	650	510	49	344577754	f
+195	Maisha mabati 2.5m	Hardware & Utilities	850	775	27	5789927	f
+197	Brake rods bm	Hardware & Utilities	100	70	5	\N	f
+199	Tubes H18	Hardware & Utilities	250	160	3	\N	f
+198	Brake rods cg	Hardware & Utilities	100	60	4	\N	f
+202	Handle lever cg	Hardware & Utilities	120	70	4	\N	f
+203	Rear Axle cg 150	Hardware & Utilities	150	120	4	\N	f
+204	Orion black 0.25l	Hardware & Utilities	150	90	4	\N	f
+205	Orion Safaricom green 0.25l	Hardware & Utilities	150	90	5	\N	f
+206	M.socket 1"	Hardware & Utilities	70	45	19	5768888	f
+207	Lockable tap 3/4	Hardware & Utilities	550	450	1	\N	f
+163	Welding Rods	Hardware & Utilities	200	160	23.305	\N	f
+211	metal grey primer 0.25	Hardware & Utilities	150	90	2	\N	f
+208	metal grey primer 4l	Hardware & Utilities	900	780	4	\N	f
+212	Bermuda Blue 4l	Hardware & Utilities	900	780	2	\N	f
+214	Bermuda Blue 0.5l	Hardware & Utilities	200	150	5	\N	f
+215	Bermuda Blue 0.25l	Hardware & Utilities	150	90	6	\N	f
+216	True Blue 4l	Hardware & Utilities	900	850	4	\N	f
+217	True Blue 1l	Hardware & Utilities	330	270	4	\N	f
+218	True Blue 0.5l	Hardware & Utilities	250	165	2	\N	f
+168	Shell Advance	Hardware & Utilities	550	470	1	\N	f
+213	Bermuda Blue 1l	Hardware & Utilities	300	250	3	\N	f
+144	Waste bend 1/1/2  90	Hardware & Utilities	50	25	10	1314253	f
+147	Waste bend 2" 90	Hardware & Utilities	80	35	10	356764	f
+146	Waste tee 4"	Hardware & Utilities	200	150	5	256764	f
+196	Maisha mabati 3m	Hardware & Utilities	970	930	18	467854	f
+219	True Blue 0.25l	Hardware & Utilities	150	100	2	\N	f
+220	Sky Blue 4l	Hardware & Utilities	900	850	2	\N	f
+221	Sky Blue 1l	Hardware & Utilities	330	270	1	\N	f
+222	Sky Blue 0.5l	Hardware & Utilities	250	165	2	\N	f
+223	Sky Blue 0.25l	Hardware & Utilities	150	100	1	\N	f
+224	Cream 4l	Hardware & Utilities	900	780	5	\N	f
+225	Cream 1l	Hardware & Utilities	300	250	0	\N	f
+226	Cream 0.5l	Hardware & Utilities	200	150	0	\N	f
+227	Cream 0.25l	Hardware & Utilities	150	90	0	\N	f
+228	Black 4l	Hardware & Utilities	900	780	4	\N	f
+230	Black 0.5l	Hardware & Utilities	200	150	2	\N	f
+231	Black 0.25l	Hardware & Utilities	150	90	5	\N	f
+232	Gun metal 4l	Hardware & Utilities	900	780	5	\N	f
+233	Gun metal 1l	Hardware & Utilities	300	250	5	\N	f
+234	Gun metal 0.5l	Hardware & Utilities	200	150	5	\N	f
+235	Gun metal 0.25l	Hardware & Utilities	150	90	0	\N	f
+236	White 4l	Hardware & Utilities	900	780	1	\N	f
+237	White 1l	Hardware & Utilities	300	250	5	\N	f
+239	white 0.25l	Hardware & Utilities	150	90	4	\N	f
+240	Signal red 1l	Hardware & Utilities	250	250	4	\N	f
+242	Signal red 0.25l	Hardware & Utilities	150	900	4	\N	f
+243	Red Oxide 1l	Hardware & Utilities	300	250	4	\N	f
+244	Red Oxide 0.5l	Hardware & Utilities	200	150	2	\N	f
+245	Red Oxide 0.25l	Hardware & Utilities	150	90	5	\N	f
+246	Safaricom Green 1l	Hardware & Utilities	300	250	3	\N	f
+247	Safaricom Green 0.5l	Hardware & Utilities	200	150	4	\N	f
+248	Safaricom Green 0.25l	Hardware & Utilities	150	90	3	\N	f
+249	Conta Orion 200ml	Hardware & Utilities	150	100	5	\N	f
+250	Conta Orion 300ml	Hardware & Utilities	200	150	5	\N	f
+251	Wood Glue Orion 1kg	Hardware & Utilities	250	200	3	\N	f
+252	Wood Glue Orion 0.5kg	Hardware & Utilities	150	110	3	\N	f
+255	Standard Thinner 1l	Hardware & Utilities	350	260	5	\N	f
+256	Mineral Turpentine 1l	Hardware & Utilities	270	220	1	\N	f
+257	Standard Thinner 500ml	Hardware & Utilities	170	125	5	\N	f
+258	Mineral Turpentine 500ml	Hardware & Utilities	170	125	3	\N	f
+260	Conta 100ml	Hardware & Utilities	250	175	3	\N	f
+261	Conta 250ml	Hardware & Utilities	350	280	2	\N	f
+262	Ponal 250ml	Hardware & Utilities	200	150	3	\N	f
+263	White Spirit 5l	Hardware & Utilities	1300	1000	1	\N	f
+264	Mineral Turpentine 5l	Hardware & Utilities	1300	1000	1	\N	f
+265	Standard thinner 5l	Hardware & Utilities	1500	1200	1	\N	f
+266	Wood Preservertive	Hardware & Utilities	300	200	5	\N	f
+268	Ball cork 3/4	Hardware & Utilities	600	450	3	\N	f
+270	Gate Valve 1"	Hardware & Utilities	1000	750	5	\N	f
+165	Mineral Turpentine 300ml	Hardware & Utilities	150	90	1	458865	f
+238	white 0.5l	Hardware & Utilities	200	150	3	\N	f
+241	Signal red 0.5l	Hardware & Utilities	200	150	4	\N	f
+259	Conta 50ml	Hardware & Utilities	150	90	0	\N	f
+269	Ball Cork 1/2	Hardware & Utilities	450	330	1	\N	f
+267	Thread Tape	Hardware & Utilities	30	20	69	\N	f
+273	Clutch plate bm croc	Hardware & Utilities	300	220	5	\N	f
+229	Black 1l	Hardware & Utilities	300	250	3	\N	f
+254	Standard Thinner 300ml	Hardware & Utilities	160	110	3	\N	f
+276	Brush 5"	Hardware & Utilities	120	85	12	\N	f
+161	Brush 2"	Hardware & Utilities	60	40	12	12311444	f
+274	Brush 6"	Hardware & Utilities	150	100	13	13578862	f
+277	Pig nipples	Hardware & Utilities	250	180	5	\N	f
+278	Magic bend 1/1/2	Hardware & Utilities	250	120	5	\N	f
+279	Gi bush 1*3/4	Hardware & Utilities	70	40	5	\N	f
+280	Gi bush 1/1/4 * 3/4	Hardware & Utilities	95	65	5	\N	f
+281	Gi bush 1/1/4 * 1	Hardware & Utilities	100	70	5	\N	f
+283	Ppr ballcork 3/4	Hardware & Utilities	160	90	3	\N	f
+282	Ppr ballcork 1"	Hardware & Utilities	180	120	3	36567	f
+284	Ppr ballcork 1/2	Hardware & Utilities	60	110	3	\N	f
+285	Tank connector 1"	Hardware & Utilities	300	210	5	\N	f
+286	Tank connector 3/4	Hardware & Utilities	250	180	5	\N	f
+287	Tank connector 1/2	Hardware & Utilities	150	100	5	\N	f
+288	LEd diffuse 4ft	Hardware & Utilities	450	300	2	\N	f
+289	LED diffuse 2ft	Hardware & Utilities	350	200	2	\N	f
+291	Ipcone pressure sprayer	Hardware & Utilities	2100	1500	3	\N	f
+290	Black sheet g18	Hardware & Utilities	2200	1950	2	\N	f
+292	Hinges 3/4	Hardware & Utilities	35	15	6	\N	f
+271	Gate Valve 3/4	Hardware & Utilities	750	550	11	4777t58	f
+272	Gate Valve 1/2	Hardware & Utilities	450	650	12	5778754	f
+301	Tube 1.5 * 1	Hardware & Utilities	700	680	5	\N	f
+304	Plastering trowel p/handle	Hardware & Utilities	150	100	3	\N	f
+305	Plastering trowel s/handle	Hardware & Utilities	200	145	2	\N	f
+294	Butterfly bush 3/4	Hardware & Utilities	100	60	16	46774377	f
+300	Tube 1.5 * 1.5	Hardware & Utilities	820	760	3	576446	f
+253	Wood Glue Orion 0.25Kg	Hardware & Utilities	100	65	1	\N	f
+275	Brush 3"	Hardware & Utilities	90	65	11	\N	f
+302	Plain sheet	Hardware & Utilities	450	210	18	\N	f
+303	Plastering trowel w/handle	Hardware & Utilities	250	170	0	\N	f
+293	Butterfly bush 1	Hardware & Utilities	100	80	25	\N	f
+295	Tube 3/4 * 3/4	Hardware & Utilities	450	390	3	\N	f
+296	Zed substandard	Hardware & Utilities	720	680	3.5	\N	f
+297	Flat 3/4 * 1/8	Hardware & Utilities	300	250	2	\N	f
+298	Flat 3/4 *1/4	Hardware & Utilities	680	570	6	\N	f
+299	Tube 1 * 1	Hardware & Utilities	550	490	15	\N	f
+306	Tee welding	Hardware & Utilities	680	640	1	135645	f
+307	MTB Magz tyres 26	Hardware & Utilities	650	530	1	\N	f
+308	Wirip bm mumero	Hardware & Utilities	400	225	5	\N	f
+\.
+
+
+--
+-- Data for Name: sale_items; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.sale_items (id, sale_id, product_id, name, quantity, price, profit) FROM stdin;
+15	15	89	ventillations	15	100	450
+16	15	99	nails 1.5"	0.25	200	21
+17	15	104	Nails 2"	0.25	200	12.5
+18	15	71	Floortrap	1	250	70
+19	15	105	PR-Royals s/socket	1	100	30
+20	15	90	S/switch box (black)	1	30	18
+21	15	4	Tester	1	50	15
+22	15	92	Handcrafted sheni	1	150	50
+23	15	59	Steel Nails 3"	16	5	24.96
+24	15	93	Oxygen free cable	2	20	28.22
+25	15	88	Artist brush set	1	200	70
+26	15	64	Juakali Hammer	1	300	80
+27	16	106	Manson spoon big	1	120	40
+28	16	107	Rollinson extra lock	1	200	50
+29	17	110	S/switch box white	2	20	16
+30	17	23	2gang highastra	1	120	50
+31	17	112	Couplers 20mm	5	7	10
+32	17	36	T/clips 10mm	1	90	35
+33	17	97	Ceiling nails	0.25	250	22.5
+34	17	108	Trunking	5	110	125
+35	17	109	Conduct pipe 20mm	3	100	90
+36	18	113	Red oxide	1.5	250	57
+37	19	113	Red oxide	2	250	76
+38	20	115	Blade sandflex	3	100	90
+39	21	114	Kevin cable black 2.5mm	1	2600	350
+40	21	116	Fei Huan padlock	1	250	50
+41	22	117	Ppr pipe 3/4	1	250	70
+42	22	118	Adaptor socket 3/4 female	1	40	12
+43	23	119	B.b axle	1	120	30
+44	23	120	B.b cups	1	120	30
+45	23	122	Fork fitting	1	200	65
+46	23	121	MTB front folk	1	650	170
+47	24	123	Motion sensor	1	750	200
+48	25	124	Evin 2.5mm	20	90	240
+49	26	125	20l premier	1	2000	500
+50	27	128	Solix lock	1	100	43.33
+51	28	129	Tape measure 5m	2	100	0
+52	29	113	Red oxide	1	250	38
+53	30	126	Tack nails 5/8	1	120	30
+54	31	131	Manson spoon small	1	100	50
+55	32	132	Bodex 200g	1	100	30
+56	32	134	Brush 4"	1	140	75
+57	32	133	Hartex tubes	1	250	50
+58	33	158	star screw driver long	1	100	30
+59	34	154	mason ropes	2	50	40
+60	35	153	Hub cups kidride	2	20	15
+61	35	152	Rear Axle normal	1	70	27.5
+62	36	135	Horse pipe 1/2 * 60ft	1	700	220
+63	36	155	Steel spoon 7"	1	200	100
+64	37	151	Spade	1	430	120
+65	38	102	Nails 3"	0.5	200	25
+66	38	104	Nails 2"	0.25	200	12.5
+67	39	136	Waste pipe brown	1	1100	250
+68	39	145	waste bend 4"  90	1	120	35
+69	39	138	Waste pipe 2"	3	400	330
+70	39	147	Waste bend 2" 90	5	80	225
+71	39	137	Waste pipe 1/1/2	1	320	90
+72	39	141	Tangit 250ml	2	500	180
+73	39	146	Waste tee 4"	1	200	50
+74	39	144	Waste bend 1/1/2  90	4	50	100
+75	39	115	Blade sandflex	1	100	30
+76	39	150	Binding wire	1	180	35.56
+77	39	149	D-bar 10	1	850	50
+78	39	142	R-6	1	200	60
+79	39	143	4-way floor trap	2	350	260
+80	40	161	Brush 2"	1	50	20
+81	40	160	4l Signal Orion	1	900	120
+82	41	133	Hartex tubes	1	230	30
+83	41	162	Hartex tyres heavy	1	750	50
+84	42	163	Welding Rods	0.5	200	20
+85	43	164	Bodex 300g	1	150	65
+86	44	165	Minral Turpentine 300ml	1	150	60
+87	45	79	Adjustable Oushida 10"	1	400	140
+88	46	166	Claw bar medium	1	600	200
+89	46	167	Claw bar big	1	650	150
+90	47	136	Waste pipe brown	1	1100	250
+91	47	145	waste bend 4"  90	1	120	35
+92	47	4	Tester	1	50	15
+93	48	129	Tape measure 5m	1	100	0
+94	49	169	saddle clips 4"	3	20	15
+95	49	170	Hex key sets Oushida	1	300	150
+96	50	171	Tangit 50ml	1	250	105
+97	51	191	Tube 1/1/2 * 1	1	580	50
+98	51	163	Welding Rods	0.25	200	10
+100	53	185	Drawer handles brass 4"	2	70	30
+101	54	193	Novq	1	400	50
+102	55	193	Novq	1	400	50
+103	56	163	Welding Rods	0.25	200	10
+104	57	96	Roofing Nails	0.5	200	19
+105	58	115	Blade sandflex	2	100	60
+106	59	96	Roofing Nails	0.25	200	9.5
+107	60	194	Maisha mabati 2m	1	650	140
+108	60	195	Maisha mabati 2.5m	1	850	75
+109	61	204	Orion black 0.25l	1	150	60
+110	61	203	Rear Axle cg 150	1	150	30
+111	61	198	Brake rods cg	1	100	40
+112	61	202	Handle lever cg	1	120	50
+113	62	62	Steel Nails 4"	6	10	37.5
+114	63	205	Orion Safaricom green 0.25l	1	140	50
+115	64	206	M.socket 1"	1	70	25
+116	65	207	Lockable tap 3/4	1	550	100
+117	66	161	Brush 2"	1	60	30
+118	66	165	Minral Turpentine 300ml	1	150	60
+119	67	238	white 0.5l	1	200	50
+120	67	241	Signal red 0.5l	1	200	50
+121	67	165	Mineral Turpentine 300ml	1	150	60
+122	68	117	Ppr pipe 3/4	2	250	140
+123	69	259	Conta 50ml	1	150	60
+124	70	269	Ball Cork 1/2	1	420	90
+125	70	267	Thread Tape	1	30	10
+126	71	59	Steel Nails 3"	4	5	6.24
+127	72	161	Brush 2"	1	50	20
+128	73	267	Thread Tape	1	30	10
+129	74	163	Welding Rods	0.25	200	10
+130	75	190	Fagio small	1	50	10
+131	76	168	Shell Advance	1	550	80
+132	77	229	Black 1l	1	300	50
+133	77	213	Bermuda Blue 1l	1	300	50
+134	77	254	Standard Thinner 300ml	1	160	50
+135	78	274	Brush 6"	1	150	60
+136	79	300	Tube 1.5 * 1.5	3	820	180
+137	79	163	Welding Rods	2	200	80
+138	79	294	Butterfly bush 3/4	1	100	40
+139	80	253	Wood Glue Orion 0.25Kg	1	100	35
+140	80	275	Brush 3"	1	80	15
+141	80	134	Brush 4"	1	100	25
+142	80	113	Red oxide	1	250	38
+143	81	302	Plain sheet	2	430	440
+144	81	66	Led 4fts diffuse	2	400	200
+145	81	100	Nails 1'	0.25	200	21
+146	82	129	Tape measure 5m	1	150	50
+147	82	113	Red oxide	1	250	38
+148	83	303	Plastering trowel w/handle	1	230	60
+149	84	295	Tube 3/4 * 3/4	3	440	150
+150	84	290	Black sheet g18	0.5	2200	125
+151	84	296	Zed substandard	1.5	680	0
+152	84	306	Tee welding	1	680	40
+153	84	292	Hinges 3/4	5	35	100
+154	84	163	Welding Rods	2	200	80
+155	84	293	Butterfly bush 1	2	100	40
+156	84	299	Tube 1 * 1	2	540	100
+157	84	298	Flat 3/4 *1/4	1	680	110
+158	84	297	Flat 3/4 * 1/8	2	290	80
+160	86	196	Maisha mabati 3m	3	970	120
+161	87	103	Nails 4"	2	200	80
+162	88	307	MTB Magz tyres 26	1	650	120
+163	89	308	Wirip bm mumero	1	370	145
+\.
+
+
+--
+-- Data for Name: sales; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.sales (id, transaction_id, total_amount, amount_paid, change_given, payment_method, sale_date, user_id, customer_name, customer_phone, payment_status) FROM stdin;
+45	1690324d-6a03-4567-9601-c7a52da4fca4	400	400	0	cash	2026-05-01 15:43:09.007	3	\N	\N	paid
+46	4c44a088-9595-4210-a64a-f80726b92362	1250	1250	0	cash	2026-05-01 16:20:07.046	3	\N	\N	paid
+24	e02ad01a-b7d5-4a28-9802-4cfe032a99f3	750	750	0	credit	2026-04-29 19:07:04.365	3	Kamande	0703278526	paid
+47	ca928bf1-e696-45c1-8089-fc174fbf9f2a	1270	1270	0	cash	2026-05-03 09:37:40.031	3	\N	\N	paid
+48	0d64d975-ef30-4fe3-ae35-ca2beaad2757	100	100	0	cash	2026-05-03 09:38:34.926	3	\N	\N	paid
+49	e09a9790-8218-46fe-ae48-372457c2ada1	360	360	0	cash	2026-05-03 09:58:29.644	3	\N	\N	paid
+50	1114d969-7ad4-425c-8020-a2c204b1ddc2	250	250	0	cash	2026-05-03 10:04:35.576	3	\N	\N	paid
+15	b96b275b-e1a7-42bc-a089-9f80b5c248e2	2800	2800	0	cash	2026-04-28 14:09:44.363	3	\N	\N	paid
+16	c0088a5d-f8aa-4d94-b30e-b7f8715aeabb	320	330	10	cash	2026-04-28 17:21:35.547	3	\N	\N	paid
+17	b6e0b004-3d07-46c7-86fd-5af5ac1333e6	1197.5	1197.5	0	cash	2026-04-29 19:02:32.578	3	\N	\N	paid
+18	46d236c1-ae5e-4ae8-932b-5ba2f03f4c9c	375	375	0	cash	2026-04-29 19:03:05.885	3	\N	\N	paid
+19	2f6c07aa-7ce4-4c08-bd32-cfa7621e053f	500	500	0	cash	2026-04-29 19:03:26.699	3	\N	\N	paid
+20	29eab36f-9807-4abf-be31-aaff91ae88cf	300	300	0	cash	2026-04-29 19:03:45.33	3	\N	\N	paid
+21	3d387301-76b6-465d-a321-f24749b1de9c	2850	2850	0	cash	2026-04-29 19:04:38.287	3	\N	\N	paid
+22	4312cdbc-bfd0-4eaa-b7fb-6fccf79c47ff	290	290	0	cash	2026-04-29 19:05:16.237	3	\N	\N	paid
+23	c098fbd9-2ddc-4cfe-865b-ee110a3065a3	1090	1090	0	cash	2026-04-29 19:05:55.975	3	\N	\N	paid
+25	c79ac828-9aa6-43d4-b9d5-eefd97baf7c8	1800	1800	0	cash	2026-04-29 19:09:57.483	3	\N	\N	paid
+26	fc80783c-5402-49d9-b888-f770474329cd	2000	2000	0	cash	2026-04-30 08:40:35.307	3	\N	\N	paid
+27	9be6f538-de1e-497b-bca2-ba98bc911ecb	100	100	0	cash	2026-04-30 08:50:36.417	3	\N	\N	paid
+28	90880503-603b-4be7-8964-32179ee9feff	200	200	0	cash	2026-04-30 08:51:03.47	3	\N	\N	paid
+29	d16c4595-a8d5-4b53-8520-9317f25c25b9	250	250	0	cash	2026-04-30 08:51:18.409	3	\N	\N	paid
+30	859555f5-7952-484d-be73-9cd8d18bbd42	120	120	0	cash	2026-04-30 08:51:42.417	3	\N	\N	paid
+31	5ce63ba8-e150-4088-a3f4-00b1ab117c31	100	100	0	cash	2026-04-30 08:55:30.89	3	\N	\N	paid
+32	bfa1b17b-3bca-45ea-9f61-45fdda1cca31	490	490	0	cash	2026-04-30 19:08:42.36	3	\N	\N	paid
+33	c5e94097-2545-42bc-9307-e6912988e5bd	100	100	0	cash	2026-05-01 11:36:55.643	3	\N	\N	paid
+34	be311a4c-25f0-4141-92d4-87663926ddcb	100	100	0	cash	2026-05-01 11:37:16.818	3	\N	\N	paid
+35	e24879cb-0157-4640-8617-f15e5ebdd126	110	110	0	cash	2026-05-01 11:37:41.383	3	\N	\N	paid
+36	359a6ff2-1902-4f22-a554-873d8e3c718c	900	900	0	cash	2026-05-01 11:38:08.062	3	\N	\N	paid
+37	37d954cc-c281-4bfa-b040-75ca9a67a394	430	430	0	cash	2026-05-01 11:38:35.495	3	\N	\N	paid
+38	ef8b3ae7-872e-4599-9af7-74c94a961057	150	150	0	cash	2026-05-01 11:40:27.478	3	\N	\N	paid
+39	7d30fa27-f1ea-445e-bdcd-a33ed7427030	6570	6570	0	cash	2026-05-01 11:56:28.412	3	\N	\N	paid
+40	be2d442c-f678-43b8-a899-cb9003f8d8db	950	950	0	cash	2026-05-01 11:58:16.886	3	\N	\N	paid
+41	2745ee03-1958-4bfb-9194-4416d543199a	980	980	0	cash	2026-05-01 12:32:11.753	3	\N	\N	paid
+42	97de0af5-e7fa-4b5c-abdf-f429817c70ae	100	100	0	cash	2026-05-01 12:48:47.714	3	\N	\N	paid
+43	d398de81-8ccb-4f02-aa1d-8572b98efba1	150	150	0	cash	2026-05-01 14:50:27.831	3	\N	\N	paid
+44	cc6a7720-4300-4dd9-90c5-55c84043a238	150	300	150	cash	2026-05-01 15:27:26.147	3	\N	\N	paid
+51	8762ba50-9f52-4fae-9bfb-33f0825ce7b8	630	630	0	cash	2026-05-03 12:03:51.955	3	\N	\N	paid
+53	ce1a3ed7-0747-4ad8-92d3-e9e2b3d6646e	140	140	0	cash	2026-05-03 12:06:14.334	3	\N	\N	paid
+54	b22c26c5-9682-4a7e-81ac-52239ec45da7	400	400	0	cash	2026-05-03 14:12:04.28	3	\N	\N	paid
+55	3493e6a8-3d5e-401d-8674-2258826d9e78	400	400	0	cash	2026-05-03 14:12:19.726	3	\N	\N	paid
+56	c8d387a9-17ea-4a7b-aea5-d73e7ea828bc	50	50	0	cash	2026-05-03 14:19:58.833	3	\N	\N	paid
+57	dd7dbe47-f0bc-4a80-9641-6a74d8480328	100	100	0	cash	2026-05-03 18:07:32.215	3	\N	\N	paid
+58	0c4ab7a6-8775-4a8f-8357-a56314065b08	200	200	0	cash	2026-05-03 18:07:54.483	3	\N	\N	paid
+59	9b0e2bf4-bb3d-4566-bce2-2905c6a63313	50	50	0	cash	2026-05-03 18:08:22.958	3	\N	\N	paid
+60	bc1b8bed-83eb-4266-9b83-238bf88cf662	1500	1500	0	cash	2026-05-03 18:17:30.018	3	\N	\N	paid
+61	ecf170a1-c156-4c8e-af9e-b23c98605e49	520	520	0	cash	2026-05-03 18:28:09.968	3	\N	\N	paid
+62	fbdf3394-4e9a-4104-b41f-df03ac436fee	60	60	0	cash	2026-05-03 18:28:49.812	3	\N	\N	paid
+63	b4fb0574-296f-4b87-87ed-918f2d02ec32	140	140	0	cash	2026-05-03 18:30:56.466	3	\N	\N	paid
+64	95494acb-1ca5-4dcc-a50d-e9f05068383f	70	70	0	cash	2026-05-03 18:41:46.755	3	\N	\N	paid
+65	8139ef87-3c38-4e97-9b81-170128fc142e	550	550	0	cash	2026-05-03 19:13:03.563	3	\N	\N	paid
+66	0ee33d8b-4069-4fd6-afc0-2353a14e1a29	210	210	0	cash	2026-05-04 08:29:02.736	3	\N	\N	paid
+67	d5581b59-d750-4e40-86d0-218560ab02fa	550	550	0	cash	2026-05-04 10:33:25.385	3	\N	\N	paid
+68	bf32f3d9-f787-4189-a176-cd51b6ddd9cc	500	500	0	cash	2026-05-04 10:33:46.021	3	\N	\N	paid
+69	53208dee-8670-4efe-b122-ed49575ee9c0	150	150	0	cash	2026-05-04 10:34:51.293	3	\N	\N	paid
+70	2b6e7bf8-ae0d-4343-89ed-59ecde27024c	450	450	0	cash	2026-05-04 10:35:37.002	3	\N	\N	paid
+71	ccf78bcc-2cef-4f34-82bf-8eed3bcc7e44	20	20	0	cash	2026-05-04 10:36:04.305	3	\N	\N	paid
+72	808f68bf-ab48-4124-b84b-b8bd59b91db7	50	50	0	cash	2026-05-04 10:37:11.886	3	\N	\N	paid
+73	ff56c7e5-c33d-4ad8-ab73-86e2040d1961	30	30	0	cash	2026-05-04 10:37:43.931	3	\N	\N	paid
+74	b6f44b1f-0a7f-4eef-92c0-55a3667d2144	50	50	0	cash	2026-05-04 10:43:26.26	3	\N	\N	paid
+75	95f35935-c271-4137-8677-c7f51fc80ac8	50	50	0	cash	2026-05-04 11:29:50.566	3	\N	\N	paid
+76	b0a4e714-a035-4cf9-9362-255be7ad1d83	550	550	0	cash	2026-05-04 15:47:51.063	3	\N	\N	paid
+77	0d2f8ab3-699d-4087-97e9-355c8b5845f5	760	760	0	cash	2026-05-04 17:11:01.461	3	\N	\N	paid
+78	694c9dee-0a16-4280-8108-35aa268ff742	150	150	0	cash	2026-05-04 17:16:22.419	3	\N	\N	paid
+79	939b511a-236d-4870-be03-daa606cf17a3	2960	2960	0	cash	2026-05-05 17:07:18.1	3	\N	\N	paid
+80	76879b17-f303-4af6-afb0-6e6f23e95d0a	530	530	0	cash	2026-05-05 17:08:27.183	3	\N	\N	paid
+81	e20ac12d-537d-45fc-8a98-36194cd96a6b	1710	1710	0	cash	2026-05-05 17:09:57.891	3	\N	\N	paid
+82	ff7b3fca-9581-43a3-a588-3932ff5ca675	400	4000	3600	cash	2026-05-05 17:13:29.77	3	\N	\N	paid
+83	e85aa320-f587-465f-9389-09c0959744c5	230	230	0	cash	2026-05-05 17:13:50.505	3	\N	\N	paid
+84	34ef4149-a905-4524-a857-50b52ff91b8a	7235	8000	765	cash	2026-05-05 17:24:45.508	3	\N	\N	paid
+87	92211738-57f6-4cba-b43c-daeacc0bd979	400	400	0	cash	2026-05-06 08:25:42.02	3	\N	\N	paid
+88	77cba8e7-c26c-440f-ab0a-bb6b80a72eb9	650	650	0	cash	2026-05-06 08:26:16.094	3	\N	\N	paid
+89	74c2ddab-6eed-4e74-9851-35bca1349c64	370	370	0	cash	2026-05-06 08:36:00.742	3	\N	\N	paid
+86	64ae9bc9-24b1-4ed2-8940-e77bc6d0ece2	2910	2910	0	credit	2026-05-05 18:05:50.987	3	Kinyua	0700815320	paid
+\.
+
+
+--
+-- Data for Name: suppliers; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.suppliers (id, name, phone, email, address, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.users (id, username, email, password_hash, role, active) FROM stdin;
+4	peter	peterthuo@gmail.com	scrypt:32768:8:1$ty236DwgYrA658tc$d0fc3f618ac347ef5d42ad4c2374696d374c574d8ed012b46cc8ba687c684469f4a1863d0c5b3b28ecc18933688babecfd73d5f24fc8d49ec11b053179683f4f	admin	f
+2	Winfred	lyfbts517@gmail.com	scrypt:32768:8:1$8rCcUIyPGlVCza3d$9f5afcff670ae6dd34f3cc48a0a3c02d39bef14149ac850d383f7fcf9591ec4c332e3bc9b059db4d05c6535c199b20acf6e99a37da56b7f9f78ad3fbcd99f94c	user	t
+1	joyce	joycewanjiku494@gmail.com	scrypt:32768:8:1$BfLnxIWVmsbjxlDY$914f4a080a42d74475243002bf35ea554bd2287af51a32338a9a49a3053a50cdeefb6a46cb36d91060eaa5aec6a94fab3da9599c395b12b1fd51dd9d469237c0	admin	f
+6	joan	joanthuo418@gmail.com	scrypt:32768:8:1$LsArOhg8hCKKQgEv$896dec5e17a2a467474b227eaa6a735ea32ede369a945452fdaa4766d2c3aa36bd86ecf73f05e721cd9ba6576e10e1aa4764f032042ba1042db7a12d97f31317	user	t
+3	Chris	chrisshege35@gmail.com	scrypt:32768:8:1$g7dPDycs32KdLEAq$25d63d10912f06339570e26e8cd4a6cd4bcd38164e407a189a8972ded9557813b1e0938544a3b30de73de86222e43e583217da6546e7abc49f9c3ab8b552cce1	admin	t
+\.
+
+
+--
+-- Name: cash_advances_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.cash_advances_id_seq', 2, true);
+
+
+--
+-- Name: debt_payments_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.debt_payments_id_seq', 9, true);
+
+
+--
+-- Name: expenses_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.expenses_id_seq', 6, true);
+
+
+--
+-- Name: mpesa_transactions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.mpesa_transactions_id_seq', 493, true);
+
+
+--
+-- Name: products_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.products_id_seq', 308, true);
+
+
+--
+-- Name: sale_items_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.sale_items_id_seq', 163, true);
+
+
+--
+-- Name: sales_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.sales_id_seq', 89, true);
+
+
+--
+-- Name: suppliers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.suppliers_id_seq', 1, false);
+
+
+--
+-- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.users_id_seq', 6, true);
+
+
+--
+-- Name: alembic_version alembic_version_pkc; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alembic_version
+    ADD CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num);
+
+
+--
+-- Name: cash_advances cash_advances_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cash_advances
+    ADD CONSTRAINT cash_advances_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: debt_payments debt_payments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.debt_payments
+    ADD CONSTRAINT debt_payments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: expenses expenses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.expenses
+    ADD CONSTRAINT expenses_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mpesa_transactions mpesa_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mpesa_transactions
+    ADD CONSTRAINT mpesa_transactions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: products products_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.products
+    ADD CONSTRAINT products_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sale_items sale_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sale_items
+    ADD CONSTRAINT sale_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sales sales_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sales
+    ADD CONSTRAINT sales_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: suppliers suppliers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.suppliers
+    ADD CONSTRAINT suppliers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_email_key UNIQUE (email);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users users_username_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_username_key UNIQUE (username);
+
+
+--
+-- Name: ix_mpesa_transactions_checkout_request_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_mpesa_transactions_checkout_request_id ON public.mpesa_transactions USING btree (checkout_request_id);
+
+
+--
+-- Name: ix_mpesa_transactions_linked_transaction_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_mpesa_transactions_linked_transaction_id ON public.mpesa_transactions USING btree (linked_transaction_id);
+
+
+--
+-- Name: ix_products_barcode; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ix_products_barcode ON public.products USING btree (barcode);
+
+
+--
+-- Name: ix_sales_transaction_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ix_sales_transaction_id ON public.sales USING btree (transaction_id);
+
+
+--
+-- Name: cash_advances cash_advances_recorded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cash_advances
+    ADD CONSTRAINT cash_advances_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id);
+
+
+--
+-- Name: debt_payments debt_payments_received_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.debt_payments
+    ADD CONSTRAINT debt_payments_received_by_fkey FOREIGN KEY (received_by) REFERENCES public.users(id);
+
+
+--
+-- Name: debt_payments debt_payments_sale_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.debt_payments
+    ADD CONSTRAINT debt_payments_sale_id_fkey FOREIGN KEY (sale_id) REFERENCES public.sales(id);
+
+
+--
+-- Name: expenses expenses_recorded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.expenses
+    ADD CONSTRAINT expenses_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id);
+
+
+--
+-- Name: sale_items sale_items_sale_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sale_items
+    ADD CONSTRAINT sale_items_sale_id_fkey FOREIGN KEY (sale_id) REFERENCES public.sales(id);
+
+
+--
+-- Name: sales sales_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sales
+    ADD CONSTRAINT sales_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict AV7kX3K650sC4mfxhg6nTVfyNptpntXqGTVIpxSVlGK6oOZ7G4AFtTBfvGxUrMx
+
