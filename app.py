@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from config import Config
 from resources.products import ProductListResource, ProductResource ,ProductCSVUploadResource
-from resources.sales import SaleListResource
+from resources.sales import SaleListResource, BackdatedSaleResource
 from resources.userActions import UserListResource, UserResource
 from auth import LoginResource, RegisterResource
 from resources.graphs import SalesTrend
@@ -82,6 +82,7 @@ with app.app_context():
     api.add_resource(CashAdvanceReturnResource,  '/advances/<int:advance_id>/return')
     api.add_resource(CashAdvanceSummaryResource, '/advances/summary')
     api.add_resource(ProductCSVUploadResource, '/products/upload-csv')
+    api.add_resource(BackdatedSaleResource, '/sales/backdated')
 
 @app.route("/")
 def index():
