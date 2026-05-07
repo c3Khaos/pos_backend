@@ -7,7 +7,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 
 HARDWARE_CATEGORY      = 'Hardware & Utilities'
-BACKDATE_WINDOW        = timedelta(hours=48)
+BACKDATE_WINDOW        = timedelta(hours=72)
 ALLOWED_BACKDATE_ROLES = {'admin', 'manager', 'owner'}
 
 
