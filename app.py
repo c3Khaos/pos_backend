@@ -4,6 +4,7 @@ from flask_restful import Api
 from extensions import db, migrate, jwt, limiter
 from flask_cors import CORS
 from dotenv import load_dotenv
+from scheduler import init_scheduler
 
 from config import Config
 from resources.products import ProductListResource, ProductResource ,ProductCSVUploadResource
@@ -50,6 +51,7 @@ limiter.init_app(app)
 db.init_app(app)
 migrate.init_app(app, db)
 jwt.init_app(app)
+init_scheduler(app)
 
 with app.app_context():
     api = Api(app)
