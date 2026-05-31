@@ -1,16 +1,11 @@
 # services/report_service.py
 from datetime import datetime, date
 from sqlalchemy import func, desc
-from models import db, Sale, SaleItem, Product, Expense, User  # adjust to your actual imports
+from models import db, Sale, SaleItem, Product, Expense, User
 
 
 def get_recipient_emails() -> list[str]:
-    """
-    Fetch all user emails from the DB.
-    Skips users with no email set.
-    Change the filter if you only want admins:
-        .filter(User.role == "admin")
-    """
+    """Fetch all user emails. Add .filter(User.role == 'admin') if you only want admins."""
     users = db.session.query(User.email).filter(
         User.email.isnot(None),
         User.email != "",
@@ -19,35 +14,40 @@ def get_recipient_emails() -> list[str]:
 
 
 def get_daily_report_data(report_date: date = None) -> dict:
-    """
-    Compile all data needed for the daily report.
-    Defaults to today if no date is provided.
-    """
     if report_date is None:
         report_date = date.today()
 
     day_start = datetime.combine(report_date, datetime.min.time())
     day_end   = datetime.combine(report_date, datetime.max.time())
 
-    # ── Sales Summary ──────────────────────────────────────────────────────────
+    # ── Sales summary: transactions + revenue come from Sale ──
     sales_query = db.session.query(
         func.count(Sale.id).label("total_transactions"),
         func.coalesce(func.sum(Sale.total_amount), 0).label("total_revenue"),
-        func.coalesce(func.sum(Sale.profit), 0).label("total_profit"),
     ).filter(
-        Sale.created_at >= day_start,
-        Sale.created_at <= day_end,
+        Sale.sale_date >= day_start,
+        Sale.sale_date <= day_end,
     ).first()
 
-    # ── Expenses ───────────────────────────────────────────────────────────────
+    # ── Profit lives on SaleItem — sum across all items in today's sales ──
+    profit_query = db.session.query(
+        func.coalesce(func.sum(SaleItem.profit), 0).label("total_profit")
+    ).join(
+        Sale, Sale.id == SaleItem.sale_id
+    ).filter(
+        Sale.sale_date >= day_start,
+        Sale.sale_date <= day_end,
+    ).first()
+
+    # ── Expenses ──
     expenses_query = db.session.query(
         func.coalesce(func.sum(Expense.amount), 0).label("total_expenses")
     ).filter(
-        Expense.created_at >= day_start,
-        Expense.created_at <= day_end,
+        Expense.expense_date >= day_start,
+        Expense.expense_date <= day_end,
     ).first()
 
-    # ── Top 10 Selling Products (by quantity sold today) ──────────────────────
+    # ── Top 10 selling products today ──
     top_products = db.session.query(
         Product.name,
         Product.category,
@@ -58,33 +58,30 @@ def get_daily_report_data(report_date: date = None) -> dict:
     ).join(
         Sale, Sale.id == SaleItem.sale_id
     ).filter(
-        Sale.created_at >= day_start,
-        Sale.created_at <= day_end,
+        Sale.sale_date >= day_start,
+        Sale.sale_date <= day_end,
     ).group_by(
         Product.id, Product.name, Product.category
     ).order_by(
         desc("qty_sold")
     ).limit(10).all()
 
-    # ── Low Stock (stock between 1 and 5) ─────────────────────────────────────
+    # ── Low stock (1–5) ──
     low_stock = db.session.query(
-        Product.name,
-        Product.category,
-        Product.stock,
+        Product.name, Product.category, Product.stock,
     ).filter(
         Product.stock > 0,
         Product.stock <= 5,
     ).order_by(Product.stock.asc()).all()
 
-    # ── Out of Stock ──────────────────────────────────────────────────────────
+    # ── Out of stock ──
     out_of_stock = db.session.query(
-        Product.name,
-        Product.category,
+        Product.name, Product.category,
     ).filter(
         Product.stock == 0
     ).order_by(Product.name.asc()).all()
 
-    gross_profit   = float(sales_query.total_profit)
+    gross_profit   = float(profit_query.total_profit)
     total_expenses = float(expenses_query.total_expenses)
     net_profit     = gross_profit - total_expenses
 
@@ -101,7 +98,7 @@ def get_daily_report_data(report_date: date = None) -> dict:
             {
                 "name":     row.name,
                 "category": row.category,
-                "qty_sold": int(row.qty_sold),
+                "qty_sold": float(row.qty_sold),
                 "revenue":  float(row.revenue),
             }
             for row in top_products

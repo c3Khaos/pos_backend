@@ -18,20 +18,21 @@ class LoginResource(Resource):
         user = User.query.filter_by(username=username).first()
 
         if user and user.check_password(password):
-            if not user.active:
-                return {"message":"Account deactivated. Contact Admin."},403
-            #implement the jwt
-            #"identy" is wht you get back after you verify the token ie user.id
-            access_token = create_access_token(identity=str(user.id))
-            refresh_token = create_refresh_token(identity = str(user.id))
-            
-            #return the token to the frontend
-            return {
-                "message": "Login successful",
-                "access_token":access_token,
-                "refresh_token":refresh_token,
-                "user": user.to_dict()
-             }, 200
+         if not user.active:
+            return {"message": "Account deactivated. Contact Admin."}, 403
+
+        access_token  = create_access_token(
+            identity=str(user.id),
+            additional_claims={"role": user.role}  # ← this was missing
+        )
+        refresh_token = create_refresh_token(identity=str(user.id))
+
+        return {
+            "message":       "Login successful",
+            "access_token":  access_token,
+            "refresh_token": refresh_token,
+            "user":          user.to_dict()
+        }, 200
 
         return {"error": "Invalid username or password."}, 401
 

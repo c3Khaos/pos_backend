@@ -1,9 +1,9 @@
 import os
+from dotenv import load_dotenv
 from flask import Flask
 from flask_restful import Api
 from extensions import db, migrate, jwt, limiter
 from flask_cors import CORS
-from dotenv import load_dotenv
 from scheduler import init_scheduler
 
 from flask import Flask, jsonify
