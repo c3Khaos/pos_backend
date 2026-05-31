@@ -6,6 +6,11 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from scheduler import init_scheduler
 
+from flask import Flask, jsonify
+from flask_jwt_extended import jwt_required, get_jwt
+from services.report_service import get_daily_report_data, get_recipient_emails
+from services.email_service  import send_daily_report
+
 from config import Config
 from resources.products import ProductListResource, ProductResource ,ProductCSVUploadResource
 from resources.sales import SaleListResource
@@ -89,6 +94,34 @@ with app.app_context():
 def index():
     return {"Message": "Welcome to POS backend API"}, 200
 
+#mannual eamil trigger
+@app.route("/admin/send-report", methods=["POST"])
+@jwt_required()
+def trigger_daily_report():
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        return jsonify({"success": False, "message": "Admin access required."}), 403
 
+    try:
+        recipients = get_recipient_emails()
+        if not recipients:
+            return jsonify({
+                "success": False,
+                "message": "No users with emails found."
+            }), 400
+
+        data   = get_daily_report_data()
+        result = send_daily_report(data, recipients)
+
+        return jsonify({
+            "success":    True,
+            "date":       data["date"],
+            "recipients": len(recipients),
+            "sent":       result["sent"],
+            "failed":     result["failed"],
+        }), 200
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 if __name__ == "__main__":
     app.run(host="localhost", debug=True, port=5555)
