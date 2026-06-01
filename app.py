@@ -4,9 +4,9 @@ from flask import Flask
 from flask_restful import Api
 from extensions import db, migrate, jwt, limiter
 from flask_cors import CORS
-from scheduler import init_scheduler
 
-from flask import Flask, jsonify
+
+from flask import Flask, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt
 from services.report_service import get_daily_report_data, get_recipient_emails
 from services.email_service  import send_daily_report
@@ -56,7 +56,7 @@ limiter.init_app(app)
 db.init_app(app)
 migrate.init_app(app, db)
 jwt.init_app(app)
-init_scheduler(app)
+
 
 with app.app_context():
     api = Api(app)
@@ -123,5 +123,34 @@ def trigger_daily_report():
 
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+    
+# ── Cron-only trigger — protected by static secret, called by cron-job.org at 22:00 EAT ──
+@app.route("/admin/send-report-cron", methods=["POST"])
+def trigger_daily_report_cron():
+    expected_secret = os.environ.get("CRON_SECRET")
+    if not expected_secret:
+        return jsonify({"success": False, "message": "CRON_SECRET not configured."}), 500
+
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header != f"Bearer {expected_secret}":
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+
+    try:
+        recipients = get_recipient_emails()
+        if not recipients:
+            return jsonify({"success": False, "message": "No recipients."}), 400
+
+        data   = get_daily_report_data()
+        result = send_daily_report(data, recipients)
+        return jsonify({
+            "success":    True,
+            "date":       data["date"],
+            "recipients": len(recipients),
+            "sent":       result["sent"],
+            "failed":     result["failed"],
+        }), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+    
 if __name__ == "__main__":
     app.run(host="localhost", debug=True, port=5555)
