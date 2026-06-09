@@ -6,23 +6,18 @@ from flask import request
 from flask_restful import Resource
 from models import Product, User
 from extensions import db
-
-HARDWARE_CATEGORY = [
-    'Hardware & Utilities',
-    'Electronics',
-    'Motorbike Spares',
-]
+from constants import HARDWARE_CATEGORIES
 
 class ProductListResource(Resource):
     def get(self):
         department = request.args.get('department')
         if department == 'hardware':
             products = Product.query.filter(
-                Product.category == HARDWARE_CATEGORY
+                Product.category.in_(HARDWARE_CATEGORIES)
             ).all()
         elif department == 'shop':
             products = Product.query.filter(
-                Product.category != HARDWARE_CATEGORY
+                Product.category.notin_(HARDWARE_CATEGORIES)
             ).all()
         else:
             products = Product.query.all()
@@ -34,15 +29,12 @@ class ProductListResource(Resource):
         user    = db.session.get(User, user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
-
         name       = request.form.get("name",       "").strip()
         category   = request.form.get("category",   "").strip()
         barcode    = request.form.get("barcode",    "").strip()
         sold_loose = request.form.get("sold_loose", "false").lower() == "true"
-
         if not name or not category:
             return {"message": "Name and category are required."}, 400
-
         try:
             price      = Decimal(str(request.form.get("price")))
             unit_price = Decimal(str(request.form.get("unit_price")))
@@ -51,12 +43,10 @@ class ProductListResource(Resource):
                 return {"message": "Price and unit price must be positive. Stock cannot be negative."}, 400
         except (TypeError, ValueError):
             return {"message": "Price, unit price and stock must be valid numbers."}, 400
-
         if barcode:
             existing = Product.query.filter_by(barcode=barcode).first()
             if existing:
                 return {"message": f"A product with barcode {barcode} already exists."}, 409
-
         new_product = Product(
             name       = name,
             category   = category,
@@ -70,7 +60,6 @@ class ProductListResource(Resource):
         db.session.commit()
         return new_product.to_dict(), 201
 
-
 class ProductResource(Resource):
     @jwt_required()
     def patch(self, product_id):
@@ -78,8 +67,7 @@ class ProductResource(Resource):
         user    = db.session.get(User, user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
-
-        product            = db.session.get(Product, product_id)
+        product = db.session.get(Product, product_id)
         if not product:
             return {"message": "Product not found."}, 404
         data               = request.get_json()
@@ -100,7 +88,6 @@ class ProductResource(Resource):
         user    = db.session.get(User, user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
-
         product = db.session.get(Product, product_id)
         if not product:
             return {"message": "Product not found."}, 404
@@ -108,34 +95,25 @@ class ProductResource(Resource):
         db.session.commit()
         return {"message": "Product deleted"}, 200
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CSV BULK UPLOAD
-# ─────────────────────────────────────────────────────────────────────────────
 class ProductCSVUploadResource(Resource):
     """POST /products/upload-csv — bulk upload products from CSV"""
-
     @jwt_required()
     def post(self):
         user_id = int(get_jwt_identity())
         user    = db.session.get(User, user_id)
         if not user or user.role != 'admin':
             return {"message": "Admin access required."}, 403
-
         if 'file' not in request.files:
             return {"message": "No file uploaded."}, 400
-
         file = request.files['file']
         if not file.filename.endswith('.csv'):
             return {"message": "File must be a CSV."}, 400
-
         try:
             stream = io.StringIO(file.stream.read().decode('utf-8'))
             reader = csv.DictReader(stream)
             added   = []
             skipped = []
             errors  = []
-
             for i, row in enumerate(reader, start=2):
                 try:
                     name       = row.get('name',       '').strip()
@@ -144,39 +122,24 @@ class ProductCSVUploadResource(Resource):
                     unit_price = row.get('unit_price', '').strip()
                     stock      = row.get('stock',      '').strip()
                     barcode    = row.get('barcode',    '').strip() or None
-
-                    # ── Validate required fields ──────────────────────────
                     if not name or not category or not price or not unit_price or not stock:
                         errors.append(f"Row {i}: missing required fields — skipped")
                         continue
-
                     price      = Decimal(str(price))
                     unit_price = Decimal(str(unit_price))
                     stock      = Decimal(str(stock))
-
                     if price <= 0 or unit_price <= 0 or stock < 0:
                         errors.append(f"Row {i}: invalid price/stock values — skipped")
                         continue
-
-                    # ── Skip duplicate barcodes ───────────────────────────
                     if barcode:
                         existing = Product.query.filter_by(barcode=barcode).first()
                         if existing:
-                            skipped.append(
-                                f"Row {i}: barcode {barcode} already exists — skipped"
-                            )
+                            skipped.append(f"Row {i}: barcode {barcode} already exists — skipped")
                             continue
-
-                    # ── Skip duplicate name + category ────────────────────
-                    existing_name = Product.query.filter_by(
-                        name=name, category=category
-                    ).first()
+                    existing_name = Product.query.filter_by(name=name, category=category).first()
                     if existing_name:
-                        skipped.append(
-                            f"Row {i}: '{name}' in '{category}' already exists — skipped"
-                        )
+                        skipped.append(f"Row {i}: '{name}' in '{category}' already exists — skipped")
                         continue
-
                     product = Product(
                         name       = name,
                         category   = category,
@@ -188,23 +151,17 @@ class ProductCSVUploadResource(Resource):
                     )
                     db.session.add(product)
                     added.append(name)
-
                 except (ValueError, KeyError) as e:
                     errors.append(f"Row {i}: {str(e)} — skipped")
                     continue
-
             db.session.commit()
             return {
                 "message": f"Upload complete! {len(added)} products added.",
                 "added":   len(added),
                 "skipped": len(skipped),
                 "errors":  len(errors),
-                "details": {
-                    "skipped": skipped[:10],
-                    "errors":  errors[:10],
-                }
+                "details": {"skipped": skipped[:10], "errors": errors[:10]}
             }, 201
-
         except Exception as e:
             db.session.rollback()
             return {"message": f"Upload failed: {str(e)}"}, 500

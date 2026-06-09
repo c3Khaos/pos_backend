@@ -6,19 +6,14 @@ from extensions import db
 from datetime import datetime, timezone
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
-
-HARDWARE_CATEGORY = [
-    'Hardware & Utilities',
-    'Electronics',
-    'Motorbike Spares',
-]
+from constants import HARDWARE_CATEGORIES
 
 def get_hardware_sale_ids():
-    """Returns set of sale IDs that contain hardware products."""
+    """Returns list of sale IDs that contain hardware products."""
     rows = db.session.query(SaleItem.sale_id).join(
         Product, SaleItem.product_id == Product.id
     ).filter(
-        Product.category == HARDWARE_CATEGORY
+        Product.category.in_(HARDWARE_CATEGORIES)
     ).distinct().all()
     return [row[0] for row in rows]
 
@@ -26,7 +21,6 @@ class SaleListResource(Resource):
     @jwt_required()
     def get(self):
         current_user_id = int(get_jwt_identity())
-        # ── Exclude hardware sales from shop sales history ────────────────
         hw_ids = get_hardware_sale_ids()
         query = Sale.query.filter_by(user_id=current_user_id)
         if hw_ids:
@@ -39,7 +33,6 @@ class SaleListResource(Resource):
         user_id = int(get_jwt_identity())
         if not user_id:
             return {"error": "Unauthorized. Please log in."}, 401
-
         data = request.get_json()
         transaction_id = data.get('transaction_id')
         items_data     = data.get('items')
@@ -49,14 +42,11 @@ class SaleListResource(Resource):
         sale_date_str  = data.get('sale_date')
         customer_name  = data.get('customer_name')
         customer_phone = data.get('customer_phone')
-
         if not transaction_id:
             return {"message": "Missing transaction_id"}, 400
         if not items_data or not isinstance(items_data, list) or total_amount is None:
             return {"message": "Invalid sale data. Missing items or amounts."}, 400
-
         total_amount = Decimal(str(total_amount))
-
         if payment_method == 'credit':
             if not customer_name or not customer_phone:
                 return {"message": "Customer name and phone are required for credit sales."}, 400
@@ -71,47 +61,38 @@ class SaleListResource(Resource):
             payment_status = 'paid'
             if change_given < 0:
                 return {"message": "Amount paid is insufficient."}, 400
-
         try:
             existing_sale = Sale.query.filter_by(transaction_id=transaction_id).first()
             if existing_sale:
                 return existing_sale.to_dict(), 200
-
             sale_date = (
                 datetime.fromisoformat(sale_date_str.replace("Z", "+00:00"))
                 if sale_date_str
                 else datetime.now(timezone.utc)
             )
-
             validated_items = []
             for item_data in items_data:
                 product_id          = item_data.get('product_id')
                 product_name        = item_data.get('name')
                 quantity            = item_data.get('quantity')
                 price_from_frontend = item_data.get('price')
-
                 if not product_id or not product_name or not quantity or price_from_frontend is None:
                     raise ValueError("Invalid item data within sale.")
-
                 product = db.session.get(Product, product_id)
                 if not product:
                     raise ValueError(f"Product {product_id} not found")
-
                 quantity            = Decimal(str(quantity))
                 price_from_frontend = Decimal(str(price_from_frontend))
-
                 if product.stock < quantity:
                     return {
                         "message": f"Not enough stock for {product.name}. Available: {product.stock}"
                     }, 409
-
                 validated_items.append({
                     "product":  product,
                     "quantity": quantity,
                     "price":    price_from_frontend,
                     "profit":   (price_from_frontend - product.unit_price) * quantity
                 })
-
             new_sale = Sale(
                 transaction_id = transaction_id,
                 total_amount   = total_amount,
@@ -126,7 +107,6 @@ class SaleListResource(Resource):
             )
             db.session.add(new_sale)
             db.session.flush()
-
             for item in validated_items:
                 product  = item["product"]
                 quantity = item["quantity"]
@@ -140,10 +120,8 @@ class SaleListResource(Resource):
                     profit     = item["profit"]
                 )
                 db.session.add(sale_item)
-
             db.session.commit()
             return new_sale.to_dict(), 201
-
         except IntegrityError:
             db.session.rollback()
             existing_sale = Sale.query.filter_by(transaction_id=transaction_id).first()
