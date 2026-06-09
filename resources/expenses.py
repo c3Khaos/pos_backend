@@ -1,32 +1,28 @@
+from decimal import Decimal
 from flask import request
 from flask_restful import Resource
 from models import Expense, User
 from extensions import db
-from datetime import datetime
+from datetime import datetime, timezone
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 
 def admin_required():
     user_id = int(get_jwt_identity())
-    user    = User.query.get(user_id)
-    return user and user.role == 'admin'  
+    user    = db.session.get(User, user_id)
+    return user and user.role == 'admin'
 
 
 class ExpenseListResource(Resource):
-
     @jwt_required()
     def get(self):
         if not admin_required():
             return {"message": "Admin access required."}, 403
 
-        # 👇 Filter by department
         department = request.args.get('department')
-
         query = Expense.query
-
         if department:
             query = query.filter(Expense.department == department)
-
         expenses = query.order_by(Expense.expense_date.desc()).all()
         return [e.to_dict() for e in expenses], 200
 
@@ -42,12 +38,17 @@ class ExpenseListResource(Resource):
         amount           = data.get("amount")
         category         = data.get("category", "").strip()
         expense_date_str = data.get("expense_date")
-        department       = data.get("department", "shop")  
+        department       = data.get("department", "shop")
 
         if not description or amount is None or not category:
             return {"message": "Description, amount and category are required."}, 400
 
-        if float(amount) <= 0:
+        try:
+            amount = Decimal(str(amount))
+        except (TypeError, ValueError):
+            return {"message": "Amount must be a valid number."}, 400
+
+        if amount <= 0:
             return {"message": "Amount must be greater than zero."}, 400
 
         if department not in ('shop', 'hardware'):
@@ -55,14 +56,15 @@ class ExpenseListResource(Resource):
 
         expense_date = (
             datetime.fromisoformat(expense_date_str.replace("Z", "+00:00"))
-            if expense_date_str else datetime.utcnow()
+            if expense_date_str
+            else datetime.now(timezone.utc)
         )
 
         expense = Expense(
             description  = description,
-            amount       = float(amount),
+            amount       = amount,
             category     = category,
-            department   = department,   # 👈 NEW
+            department   = department,
             expense_date = expense_date,
             recorded_by  = user_id
         )
@@ -72,13 +74,14 @@ class ExpenseListResource(Resource):
 
 
 class ExpenseResource(Resource):
-
     @jwt_required()
     def delete(self, expense_id):
         if not admin_required():
             return {"message": "Admin access required."}, 403
 
-        expense = Expense.query.get_or_404(expense_id)
+        expense = db.session.get(Expense, expense_id)
+        if not expense:
+            return {"message": "Expense not found."}, 404
         db.session.delete(expense)
         db.session.commit()
         return {"message": "Expense deleted"}, 200

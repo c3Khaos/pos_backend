@@ -1,5 +1,6 @@
 import csv
 import io
+from decimal import Decimal
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask import request
 from flask_restful import Resource
@@ -8,12 +9,9 @@ from extensions import db
 
 HARDWARE_CATEGORY = 'Hardware & Utilities'
 
-
 class ProductListResource(Resource):
-
     def get(self):
         department = request.args.get('department')
-
         if department == 'hardware':
             products = Product.query.filter(
                 Product.category == HARDWARE_CATEGORY
@@ -24,13 +22,12 @@ class ProductListResource(Resource):
             ).all()
         else:
             products = Product.query.all()
-
         return [product.to_dict() for product in products], 200
 
     @jwt_required()
     def post(self):
         user_id = int(get_jwt_identity())
-        user    = User.query.get(user_id)
+        user    = db.session.get(User, user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
 
@@ -43,9 +40,9 @@ class ProductListResource(Resource):
             return {"message": "Name and category are required."}, 400
 
         try:
-            price      = float(request.form.get("price"))
-            unit_price = float(request.form.get("unit_price"))
-            stock      = float(request.form.get("stock"))
+            price      = Decimal(str(request.form.get("price")))
+            unit_price = Decimal(str(request.form.get("unit_price")))
+            stock      = Decimal(str(request.form.get("stock")))
             if price <= 0 or unit_price <= 0 or stock < 0:
                 return {"message": "Price and unit price must be positive. Stock cannot be negative."}, 400
         except (TypeError, ValueError):
@@ -71,36 +68,38 @@ class ProductListResource(Resource):
 
 
 class ProductResource(Resource):
-
     @jwt_required()
     def patch(self, product_id):
         user_id = int(get_jwt_identity())
-        user    = User.query.get(user_id)
+        user    = db.session.get(User, user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
 
-        product            = Product.query.get_or_404(product_id)
+        product            = db.session.get(Product, product_id)
+        if not product:
+            return {"message": "Product not found."}, 404
         data               = request.get_json()
         product.name       = data.get("name",       product.name)
         product.category   = data.get("category",   product.category)
-        product.price      = data.get("price",      product.price)
-        product.unit_price = data.get("unit_price", product.unit_price)
-        product.stock      = data.get("stock",      product.stock)
+        product.price      = Decimal(str(data.get("price",      product.price)))
+        product.unit_price = Decimal(str(data.get("unit_price", product.unit_price)))
+        product.stock      = Decimal(str(data.get("stock",      product.stock)))
         product.barcode    = data.get("barcode",    product.barcode)
         if "sold_loose" in data:
             product.sold_loose = data.get("sold_loose")
-
         db.session.commit()
         return product.to_dict(), 200
 
     @jwt_required()
     def delete(self, product_id):
         user_id = int(get_jwt_identity())
-        user    = User.query.get(user_id)
+        user    = db.session.get(User, user_id)
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
 
-        product = Product.query.get_or_404(product_id)
+        product = db.session.get(Product, product_id)
+        if not product:
+            return {"message": "Product not found."}, 404
         db.session.delete(product)
         db.session.commit()
         return {"message": "Product deleted"}, 200
@@ -115,7 +114,7 @@ class ProductCSVUploadResource(Resource):
     @jwt_required()
     def post(self):
         user_id = int(get_jwt_identity())
-        user    = User.query.get(user_id)
+        user    = db.session.get(User, user_id)
         if not user or user.role != 'admin':
             return {"message": "Admin access required."}, 403
 
@@ -123,14 +122,12 @@ class ProductCSVUploadResource(Resource):
             return {"message": "No file uploaded."}, 400
 
         file = request.files['file']
-
         if not file.filename.endswith('.csv'):
             return {"message": "File must be a CSV."}, 400
 
         try:
             stream = io.StringIO(file.stream.read().decode('utf-8'))
             reader = csv.DictReader(stream)
-
             added   = []
             skipped = []
             errors  = []
@@ -149,9 +146,9 @@ class ProductCSVUploadResource(Resource):
                         errors.append(f"Row {i}: missing required fields — skipped")
                         continue
 
-                    price      = float(price)
-                    unit_price = float(unit_price)
-                    stock      = int(stock)
+                    price      = Decimal(str(price))
+                    unit_price = Decimal(str(unit_price))
+                    stock      = Decimal(str(stock))
 
                     if price <= 0 or unit_price <= 0 or stock < 0:
                         errors.append(f"Row {i}: invalid price/stock values — skipped")
@@ -193,7 +190,6 @@ class ProductCSVUploadResource(Resource):
                     continue
 
             db.session.commit()
-
             return {
                 "message": f"Upload complete! {len(added)} products added.",
                 "added":   len(added),

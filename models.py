@@ -1,4 +1,5 @@
 from extensions import db
+from sqlalchemy import Numeric
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 
@@ -36,11 +37,11 @@ class Sale(db.Model):
 
     id             = db.Column(db.Integer, primary_key=True)
     transaction_id = db.Column(db.String(100), unique=True, nullable=True, index=True)
-    total_amount   = db.Column(db.Float, nullable=False)
-    amount_paid    = db.Column(db.Float, nullable=False)
-    change_given   = db.Column(db.Float, nullable=False)
+    total_amount   = db.Column(db.Numeric(10, 2), nullable=False)
+    amount_paid    = db.Column(db.Numeric(10, 2), nullable=False)
+    change_given   = db.Column(db.Numeric(10, 2), nullable=False)
     payment_method = db.Column(db.String(50), nullable=False)
-    sale_date      = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    sale_date      = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     user_id        = db.Column(db.Integer, db.ForeignKey('users.id'))
     seller         = db.relationship("User", back_populates="sales")
     items          = db.relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan")
@@ -49,13 +50,12 @@ class Sale(db.Model):
     payment_status = db.Column(db.String(20),  default='paid')
 
     def to_dict(self):
-        change = self.amount_paid - self.total_amount
         return {
             "id":             self.id,
             "sale_number":    f"SALE-{self.id}",
             "total_amount":   self.total_amount,
             "amount_paid":    self.amount_paid,
-            "change":         change,
+            "change_given":    self.change_given,
             "payment_method": self.payment_method,
             "sale_date":      self.sale_date.isoformat() + "Z",
             "user":           self.seller.username if self.seller else None,
@@ -71,11 +71,11 @@ class SaleItem(db.Model):
 
     id         = db.Column(db.Integer, primary_key=True)
     sale_id    = db.Column(db.Integer, db.ForeignKey('sales.id'), nullable=False)
-    product_id = db.Column(db.Integer, nullable=False)
+    product_id = db.Column(db.Integer,db.ForeignKey('products.id'), nullable=False)
     name       = db.Column(db.String(120), nullable=False)
-    quantity   = db.Column(db.Float, nullable=False)
-    price      = db.Column(db.Float, nullable=False)
-    profit     = db.Column(db.Float, nullable=False)
+    quantity   = db.Column(db.Numeric(10, 2), nullable=False)
+    price      = db.Column(db.Numeric(10, 2), nullable=False)
+    profit     = db.Column(db.Numeric(10, 2), nullable=False)
 
     sale = db.relationship("Sale", back_populates="items")
 
@@ -95,9 +95,9 @@ class Product(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
     name       = db.Column(db.String(80), nullable=False)
     category   = db.Column(db.String(80), nullable=False)
-    price      = db.Column(db.Float, nullable=False)
-    unit_price = db.Column(db.Float, nullable=False)
-    stock      = db.Column(db.Float, nullable=False)
+    price      = db.Column(db.Numeric(10, 2), nullable=False)
+    unit_price = db.Column(db.Numeric(10, 2), nullable=False)
+    stock      = db.Column(db.Numeric(10, 2), nullable=False)
     barcode    = db.Column(db.String, nullable=True, unique=True, index=True)
     sold_loose = db.Column(db.Boolean, default=False, nullable=False)
 
@@ -122,7 +122,7 @@ class Supplier(db.Model):
     phone      = db.Column(db.String(20), nullable=False)
     email      = db.Column(db.String(120), nullable=True)
     address    = db.Column(db.String(200), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
@@ -140,12 +140,12 @@ class Expense(db.Model):
 
     id           = db.Column(db.Integer,     primary_key=True)
     description  = db.Column(db.String(200), nullable=False)
-    amount       = db.Column(db.Float,       nullable=False)
+    amount       = db.Column(db.Numeric(10, 2),       nullable=False)
     category     = db.Column(db.String(80),  nullable=False)
     department   = db.Column(db.String(20),  nullable=False, default='shop')  # 👈 NEW
-    expense_date = db.Column(db.DateTime,    nullable=False, default=datetime.utcnow)
+    expense_date = db.Column(db.DateTime,    nullable=False, default=lambda: datetime.now(timezone.utc))
     recorded_by  = db.Column(db.Integer,     db.ForeignKey('users.id'), nullable=True)
-    created_at   = db.Column(db.DateTime,    default=datetime.utcnow)
+    created_at   = db.Column(db.DateTime,    default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
@@ -167,11 +167,11 @@ class MpesaTransaction(db.Model):
     checkout_request_id  = db.Column(db.String(100), nullable=True, index=True)
     result_code          = db.Column(db.Integer, nullable=True)
     result_desc          = db.Column(db.String(255), nullable=True)
-    amount               = db.Column(db.Float, nullable=True)
+    amount               = db.Column(db.Numeric(10, 2), nullable=True)
     mpesa_receipt_number = db.Column(db.String(100), nullable=True)
     phone_number         = db.Column(db.String(20), nullable=True)
     transaction_date     = db.Column(db.String(50), nullable=True)
-    created_at           = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at           = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     sender_first_name    = db.Column(db.String(100), nullable=True)
     sender_middle_name   = db.Column(db.String(100), nullable=True)
     sender_last_name     = db.Column(db.String(100), nullable=True)
@@ -211,7 +211,7 @@ class DebtPayment(db.Model):
 
     id          = db.Column(db.Integer, primary_key=True)
     sale_id     = db.Column(db.Integer, db.ForeignKey('sales.id'), nullable=False)
-    amount      = db.Column(db.Float, nullable=False)
+    amount      = db.Column(db.Numeric(10, 2), nullable=False)
     method      = db.Column(db.String(20))
     paid_at     = db.Column(db.DateTime, default=db.func.now())
     received_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -231,9 +231,9 @@ class CashAdvance(db.Model):
 
     id               = db.Column(db.Integer,     primary_key=True)
     person_name      = db.Column(db.String(100), nullable=False)
-    amount           = db.Column(db.Float,       nullable=False)
+    amount           = db.Column(db.Numeric(10, 2),      nullable=False)
     reason           = db.Column(db.String(255), nullable=True)
-    amount_returned  = db.Column(db.Float,       default=0)
+    amount_returned  = db.Column(db.Numeric(10, 2),      default=0)
     status           = db.Column(db.String(20),  default='pending')  # pending | partial | returned
     department       = db.Column(db.String(20),  default='shop')     # shop | hardware
     taken_at         = db.Column(db.DateTime,    default=lambda: datetime.now(timezone.utc))
