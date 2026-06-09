@@ -4,7 +4,11 @@ from sqlalchemy import func
 from datetime import datetime, timezone, timedelta
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-HARDWARE_CATEGORY = 'Hardware & Utilities'
+HARDWARE_CATEGORY = [
+    'Hardware & Utilities',
+    'Electronics',
+    'Motorbike Spares',
+]
 
 
 def hardware_sale_ids_subquery():

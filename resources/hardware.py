@@ -7,7 +7,11 @@ from sqlalchemy import func, cast, Date, text
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta
 
-HARDWARE_CATEGORY   = 'Hardware & Utilities'
+HARDWARE_CATEGORY = [
+    'Hardware & Utilities',
+    'Electronics',
+    'Motorbike Spares',
+]
 LOW_STOCK_THRESHOLD = 1
 
 

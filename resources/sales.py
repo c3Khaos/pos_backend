@@ -7,7 +7,11 @@ from datetime import datetime, timezone
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 
-HARDWARE_CATEGORY = 'Hardware & Utilities'
+HARDWARE_CATEGORY = [
+    'Hardware & Utilities',
+    'Electronics',
+    'Motorbike Spares',
+]
 
 def get_hardware_sale_ids():
     """Returns set of sale IDs that contain hardware products."""

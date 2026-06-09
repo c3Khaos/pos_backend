@@ -3,25 +3,19 @@ from sqlalchemy import Numeric
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 
-
 class User(db.Model):
     __tablename__ = "users"
-
     id            = db.Column(db.Integer, primary_key=True)
     username      = db.Column(db.String(80), unique=True, nullable=False)
     email         = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role          = db.Column(db.String(50), default='user', nullable=False)
     active        = db.Column(db.Boolean, default=True, nullable=False)
-
     sales = db.relationship("Sale", back_populates="seller")
-
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
-
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
-
     def to_dict(self):
         return {
             "id":       self.id,
@@ -31,10 +25,8 @@ class User(db.Model):
             "active":   self.active,
         }
 
-
 class Sale(db.Model):
     __tablename__ = "sales"
-
     id             = db.Column(db.Integer, primary_key=True)
     transaction_id = db.Column(db.String(100), unique=True, nullable=True, index=True)
     total_amount   = db.Column(db.Numeric(10, 2), nullable=False)
@@ -48,14 +40,13 @@ class Sale(db.Model):
     customer_name  = db.Column(db.String(100), nullable=True)
     customer_phone = db.Column(db.String(20),  nullable=True)
     payment_status = db.Column(db.String(20),  default='paid')
-
     def to_dict(self):
         return {
             "id":             self.id,
             "sale_number":    f"SALE-{self.id}",
-            "total_amount":   self.total_amount,
-            "amount_paid":    self.amount_paid,
-            "change_given":    self.change_given,
+            "total_amount":   float(self.total_amount),
+            "amount_paid":    float(self.amount_paid),
+            "change_given":   float(self.change_given),
             "payment_method": self.payment_method,
             "sale_date":      self.sale_date.isoformat() + "Z",
             "user":           self.seller.username if self.seller else None,
@@ -65,33 +56,27 @@ class Sale(db.Model):
             "items":          [item.to_dict() for item in self.items],
         }
 
-
 class SaleItem(db.Model):
     __tablename__ = "sale_items"
-
     id         = db.Column(db.Integer, primary_key=True)
     sale_id    = db.Column(db.Integer, db.ForeignKey('sales.id'), nullable=False)
-    product_id = db.Column(db.Integer,db.ForeignKey('products.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
     name       = db.Column(db.String(120), nullable=False)
     quantity   = db.Column(db.Numeric(10, 2), nullable=False)
     price      = db.Column(db.Numeric(10, 2), nullable=False)
     profit     = db.Column(db.Numeric(10, 2), nullable=False)
-
     sale = db.relationship("Sale", back_populates="items")
-
     def to_dict(self):
         return {
             "product_id": self.product_id,
             "name":       self.name,
-            "quantity":   self.quantity,
-            "price":      self.price,
-            "profit":     self.profit,
+            "quantity":   float(self.quantity),
+            "price":      float(self.price),
+            "profit":     float(self.profit),
         }
-
 
 class Product(db.Model):
     __tablename__ = "products"
-
     id         = db.Column(db.Integer, primary_key=True)
     name       = db.Column(db.String(80), nullable=False)
     category   = db.Column(db.String(80), nullable=False)
@@ -100,30 +85,26 @@ class Product(db.Model):
     stock      = db.Column(db.Numeric(10, 2), nullable=False)
     barcode    = db.Column(db.String, nullable=True, unique=True, index=True)
     sold_loose = db.Column(db.Boolean, default=False, nullable=False)
-
     def to_dict(self):
         return {
             "id":         self.id,
             "name":       self.name,
             "category":   self.category,
-            "price":      self.price,
-            "unit_price": self.unit_price,
-            "stock":      self.stock,
+            "price":      float(self.price),
+            "unit_price": float(self.unit_price),
+            "stock":      float(self.stock),
             "barcode":    self.barcode,
             "sold_loose": self.sold_loose,
         }
 
-
 class Supplier(db.Model):
     __tablename__ = 'suppliers'
-
     id         = db.Column(db.Integer, primary_key=True)
     name       = db.Column(db.String(100), nullable=False)
     phone      = db.Column(db.String(20), nullable=False)
     email      = db.Column(db.String(120), nullable=True)
     address    = db.Column(db.String(200), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-
     def to_dict(self):
         return {
             "id":         self.id,
@@ -134,66 +115,59 @@ class Supplier(db.Model):
             "created_at": self.created_at.isoformat() + "Z",
         }
 
-
 class Expense(db.Model):
     __tablename__ = 'expenses'
-
-    id           = db.Column(db.Integer,     primary_key=True)
-    description  = db.Column(db.String(200), nullable=False)
-    amount       = db.Column(db.Numeric(10, 2),       nullable=False)
-    category     = db.Column(db.String(80),  nullable=False)
-    department   = db.Column(db.String(20),  nullable=False, default='shop')  # 👈 NEW
-    expense_date = db.Column(db.DateTime,    nullable=False, default=lambda: datetime.now(timezone.utc))
-    recorded_by  = db.Column(db.Integer,     db.ForeignKey('users.id'), nullable=True)
-    created_at   = db.Column(db.DateTime,    default=lambda: datetime.now(timezone.utc))
-
+    id           = db.Column(db.Integer,      primary_key=True)
+    description  = db.Column(db.String(200),  nullable=False)
+    amount       = db.Column(db.Numeric(10, 2), nullable=False)
+    category     = db.Column(db.String(80),   nullable=False)
+    department   = db.Column(db.String(20),   nullable=False, default='shop')
+    expense_date = db.Column(db.DateTime,     nullable=False, default=lambda: datetime.now(timezone.utc))
+    recorded_by  = db.Column(db.Integer,      db.ForeignKey('users.id'), nullable=True)
+    created_at   = db.Column(db.DateTime,     default=lambda: datetime.now(timezone.utc))
     def to_dict(self):
         return {
             "id":           self.id,
             "description":  self.description,
-            "amount":       self.amount,
+            "amount":       float(self.amount),
             "category":     self.category,
-            "department":   self.department,   # 👈 NEW
+            "department":   self.department,
             "expense_date": self.expense_date.isoformat() + "Z",
             "recorded_by":  self.recorded_by,
             "created_at":   self.created_at.isoformat() + "Z",
         }
-    
+
 class MpesaTransaction(db.Model):
     __tablename__ = 'mpesa_transactions'
-
-    id                   = db.Column(db.Integer, primary_key=True)
-    merchant_request_id  = db.Column(db.String(100), nullable=True)
-    checkout_request_id  = db.Column(db.String(100), nullable=True, index=True)
-    result_code          = db.Column(db.Integer, nullable=True)
-    result_desc          = db.Column(db.String(255), nullable=True)
-    amount               = db.Column(db.Numeric(10, 2), nullable=True)
-    mpesa_receipt_number = db.Column(db.String(100), nullable=True)
-    phone_number         = db.Column(db.String(20), nullable=True)
-    transaction_date     = db.Column(db.String(50), nullable=True)
-    created_at           = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    sender_first_name    = db.Column(db.String(100), nullable=True)
-    sender_middle_name   = db.Column(db.String(100), nullable=True)
-    sender_last_name     = db.Column(db.String(100), nullable=True)
+    id                    = db.Column(db.Integer, primary_key=True)
+    merchant_request_id   = db.Column(db.String(100), nullable=True)
+    checkout_request_id   = db.Column(db.String(100), nullable=True, index=True)
+    result_code           = db.Column(db.Integer, nullable=True)
+    result_desc           = db.Column(db.String(255), nullable=True)
+    amount                = db.Column(db.Numeric(10, 2), nullable=True)
+    mpesa_receipt_number  = db.Column(db.String(100), nullable=True)
+    phone_number          = db.Column(db.String(20), nullable=True)
+    transaction_date      = db.Column(db.String(50), nullable=True)
+    created_at            = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    sender_first_name     = db.Column(db.String(100), nullable=True)
+    sender_middle_name    = db.Column(db.String(100), nullable=True)
+    sender_last_name      = db.Column(db.String(100), nullable=True)
     linked_transaction_id = db.Column(db.String(100), nullable=True, index=True)
-
     @property
     def sender_full_name(self):
         parts = [self.sender_first_name, self.sender_middle_name, self.sender_last_name]
         full  = " ".join(p for p in parts if p).strip()
         return full if full else (self.phone_number or "Unknown")
-
     @property
     def is_claimed(self):
         return self.linked_transaction_id is not None
-
     def to_dict(self):
         return {
             "id":                    self.id,
             "checkout_request_id":   self.checkout_request_id,
             "result_code":           self.result_code,
             "result_desc":           self.result_desc,
-            "amount":                self.amount,
+            "amount":                float(self.amount) if self.amount is not None else None,
             "mpesa_receipt_number":  self.mpesa_receipt_number,
             "phone_number":          self.phone_number,
             "transaction_date":      self.transaction_date,
@@ -208,46 +182,44 @@ class MpesaTransaction(db.Model):
 
 class DebtPayment(db.Model):
     __tablename__ = 'debt_payments'
-
     id          = db.Column(db.Integer, primary_key=True)
     sale_id     = db.Column(db.Integer, db.ForeignKey('sales.id'), nullable=False)
     amount      = db.Column(db.Numeric(10, 2), nullable=False)
     method      = db.Column(db.String(20))
     paid_at     = db.Column(db.DateTime, default=db.func.now())
     received_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-
     def to_dict(self):
         return {
             "id":          self.id,
             "sale_id":     self.sale_id,
-            "amount":      self.amount,
+            "amount":      float(self.amount),
             "method":      self.method,
             "paid_at":     self.paid_at.isoformat() + "Z" if self.paid_at else None,
             "received_by": self.received_by,
         }
-    
+
 class CashAdvance(db.Model):
     __tablename__ = 'cash_advances'
-
-    id               = db.Column(db.Integer,     primary_key=True)
-    person_name      = db.Column(db.String(100), nullable=False)
-    amount           = db.Column(db.Numeric(10, 2),      nullable=False)
-    reason           = db.Column(db.String(255), nullable=True)
-    amount_returned  = db.Column(db.Numeric(10, 2),      default=0)
-    status           = db.Column(db.String(20),  default='pending')  # pending | partial | returned
-    department       = db.Column(db.String(20),  default='shop')     # shop | hardware
-    taken_at         = db.Column(db.DateTime,    default=lambda: datetime.now(timezone.utc))
-    returned_at      = db.Column(db.DateTime,    nullable=True)
-    recorded_by      = db.Column(db.Integer,     db.ForeignKey('users.id'), nullable=True)
-
+    id              = db.Column(db.Integer,       primary_key=True)
+    person_name     = db.Column(db.String(100),   nullable=False)
+    amount          = db.Column(db.Numeric(10, 2), nullable=False)
+    reason          = db.Column(db.String(255),   nullable=True)
+    amount_returned = db.Column(db.Numeric(10, 2), default=0)
+    status          = db.Column(db.String(20),    default='pending')
+    department      = db.Column(db.String(20),    default='shop')
+    taken_at        = db.Column(db.DateTime,      default=lambda: datetime.now(timezone.utc))
+    returned_at     = db.Column(db.DateTime,      nullable=True)
+    recorded_by     = db.Column(db.Integer,       db.ForeignKey('users.id'), nullable=True)
     def to_dict(self):
+        amount          = float(self.amount)
+        amount_returned = float(self.amount_returned) if self.amount_returned else 0.0
         return {
             'id':              self.id,
             'person_name':     self.person_name,
-            'amount':          self.amount,
+            'amount':          amount,
             'reason':          self.reason,
-            'amount_returned': self.amount_returned or 0,
-            'amount_owed':     self.amount - (self.amount_returned or 0),
+            'amount_returned': amount_returned,
+            'amount_owed':     round(amount - amount_returned, 2),
             'status':          self.status,
             'department':      self.department,
             'taken_at':        self.taken_at.isoformat() if self.taken_at else None,

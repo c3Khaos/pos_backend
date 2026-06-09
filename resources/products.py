@@ -7,7 +7,11 @@ from flask_restful import Resource
 from models import Product, User
 from extensions import db
 
-HARDWARE_CATEGORY = 'Hardware & Utilities'
+HARDWARE_CATEGORY = [
+    'Hardware & Utilities',
+    'Electronics',
+    'Motorbike Spares',
+]
 
 class ProductListResource(Resource):
     def get(self):
