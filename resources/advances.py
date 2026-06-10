@@ -1,3 +1,4 @@
+from decimal import Decimal
 from flask import request
 from flask_restful import Resource
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -7,7 +8,7 @@ from datetime import datetime, timezone
 
 
 def is_admin(user_id):
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     return user and user.role == 'admin'
 
 
@@ -17,7 +18,7 @@ class CashAdvanceListResource(Resource):
 
     @jwt_required()
     def get(self):
-        user_id = int(get_jwt_identity())  # 👈 fix
+        user_id = int(get_jwt_identity())
         if not is_admin(user_id):
             return {"message": "Admin access required."}, 403
 
@@ -31,7 +32,6 @@ class CashAdvanceListResource(Resource):
             query = query.filter(CashAdvance.department == department)
 
         if show_all:
-            # Return everything including returned
             if status:
                 query = query.filter(CashAdvance.status == status)
         elif status:
@@ -45,7 +45,7 @@ class CashAdvanceListResource(Resource):
 
     @jwt_required()
     def post(self):
-        user_id = int(get_jwt_identity())  # 👈 fix
+        user_id = int(get_jwt_identity())
         if not is_admin(user_id):
             return {"message": "Admin access required."}, 403
 
@@ -63,7 +63,7 @@ class CashAdvanceListResource(Resource):
             return {"message": "Amount is required."}, 400
 
         try:
-            amount = float(amount)
+            amount = Decimal(str(amount))
         except (TypeError, ValueError):
             return {"message": "Invalid amount."}, 400
 
@@ -90,12 +90,14 @@ class CashAdvanceReturnResource(Resource):
 
     @jwt_required()
     def post(self, advance_id):
-        user_id = int(get_jwt_identity())  # 👈 fix
+        user_id = int(get_jwt_identity())
         if not is_admin(user_id):
             return {"message": "Admin access required."}, 403
 
-        advance = CashAdvance.query.get_or_404(advance_id)
-        data    = request.get_json()
+        advance = db.session.get(CashAdvance, advance_id)
+        if not advance:
+            return {"message": "Advance not found."}, 404
+        data = request.get_json()
 
         if advance.status == 'returned':
             return {"message": "This advance has already been fully returned."}, 400
@@ -105,14 +107,15 @@ class CashAdvanceReturnResource(Resource):
             return {"message": "Amount is required."}, 400
 
         try:
-            amount_returning = float(amount_returning)
+            amount_returning = Decimal(str(amount_returning))
         except (TypeError, ValueError):
             return {"message": "Invalid amount."}, 400
 
         if amount_returning <= 0:
             return {"message": "Amount must be greater than 0."}, 400
 
-        amount_still_owed = advance.amount - (advance.amount_returned or 0)
+        already_returned  = advance.amount_returned or Decimal('0')
+        amount_still_owed = advance.amount - already_returned
 
         if amount_returning > amount_still_owed:
             return {
@@ -120,7 +123,7 @@ class CashAdvanceReturnResource(Resource):
             }, 400
 
         try:
-            advance.amount_returned = (advance.amount_returned or 0) + amount_returning
+            advance.amount_returned = already_returned + amount_returning
 
             if advance.amount_returned >= advance.amount:
                 advance.status      = 'returned'
@@ -133,8 +136,8 @@ class CashAdvanceReturnResource(Resource):
             return {
                 "message":         "Return recorded successfully.",
                 "advance":         advance.to_dict(),
-                "amount_returned": advance.amount_returned,
-                "amount_owed":     advance.amount - advance.amount_returned,
+                "amount_returned": float(advance.amount_returned),
+                "amount_owed":     float(advance.amount - advance.amount_returned),
                 "status":          advance.status,
             }, 200
 
@@ -148,29 +151,35 @@ class CashAdvanceSummaryResource(Resource):
 
     @jwt_required()
     def get(self):
-        user_id = int(get_jwt_identity())  # 👈 fix
+        user_id = int(get_jwt_identity())
         if not is_admin(user_id):
             return {"message": "Admin access required."}, 403
 
         department = request.args.get('department')
 
-        query = CashAdvance.query.filter(
+        # ── Outstanding (pending + partial) ──────────────────────────────
+        outstanding_q = CashAdvance.query.filter(
             CashAdvance.status.in_(['pending', 'partial'])
         )
-
         if department:
-            query = query.filter(CashAdvance.department == department)
+            outstanding_q = outstanding_q.filter(CashAdvance.department == department)
+        outstanding = outstanding_q.all()
 
-        outstanding = query.all()
+        # ── All-time advances for this department ────────────────────────
+        all_q = CashAdvance.query
+        if department:
+            all_q = all_q.filter(CashAdvance.department == department)
+        all_advances = all_q.all()
 
-        total_taken    = sum(a.amount for a in outstanding)
-        total_returned = sum(a.amount_returned or 0 for a in outstanding)
-        total_owed     = total_taken - total_returned
-        count          = len(outstanding)
+        total_taken    = sum(a.amount for a in all_advances)
+        total_returned = sum((a.amount_returned or Decimal('0')) for a in all_advances)
+        total_owed     = sum(
+            a.amount - (a.amount_returned or Decimal('0')) for a in outstanding
+        )
 
         return {
-            "total_taken":    round(total_taken,    2),
-            "total_returned": round(total_returned, 2),
-            "total_owed":     round(total_owed,     2),
-            "count":          count,
+            "total_taken":    float(round(total_taken,    2)),
+            "total_returned": float(round(total_returned, 2)),
+            "total_owed":     float(round(total_owed,     2)),
+            "count":          len(outstanding),
         }, 200
