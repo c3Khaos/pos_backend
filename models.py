@@ -3,6 +3,29 @@ from sqlalchemy import Numeric
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 
+
+# ── Timestamp serialization helper ──────────────────────────────────────────
+# All API responses MUST include an explicit "Z" suffix on datetime fields
+# so frontend JavaScript parses them as UTC (not local time).
+#
+# Bug history: Mpesa transactions, cash advances, and debt payments were
+# previously emitting isoformat() without "Z", causing JS to treat them as
+# Nairobi-local — every M-Pesa timestamp displayed 3 hours off, and the
+# "today" filter shifted by a day around midnight.
+def iso_utc(dt):
+    """Serialize a datetime as ISO 8601 with explicit UTC marker.
+    Returns None if dt is None. Safe to call on any datetime field.
+    """
+    return dt.isoformat() + "Z" if dt is not None else None
+
+
+# ── Default factory for timezone-aware datetime columns ─────────────────────
+# Use this everywhere — never use db.func.now() (DB-server-local time, not
+# guaranteed to be UTC).
+def utc_now():
+    return datetime.now(timezone.utc)
+
+
 class User(db.Model):
     __tablename__ = "users"
     id            = db.Column(db.Integer, primary_key=True)
@@ -11,11 +34,15 @@ class User(db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     role          = db.Column(db.String(50), default='user', nullable=False)
     active        = db.Column(db.Boolean, default=True, nullable=False)
+
     sales = db.relationship("Sale", back_populates="seller")
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
+
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
     def to_dict(self):
         return {
             "id":       self.id,
@@ -25,6 +52,7 @@ class User(db.Model):
             "active":   self.active,
         }
 
+
 class Sale(db.Model):
     __tablename__ = "sales"
     id             = db.Column(db.Integer, primary_key=True)
@@ -33,13 +61,14 @@ class Sale(db.Model):
     amount_paid    = db.Column(db.Numeric(10, 2), nullable=False)
     change_given   = db.Column(db.Numeric(10, 2), nullable=False)
     payment_method = db.Column(db.String(50), nullable=False)
-    sale_date      = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    sale_date      = db.Column(db.DateTime, nullable=False, default=utc_now)
     user_id        = db.Column(db.Integer, db.ForeignKey('users.id'))
     seller         = db.relationship("User", back_populates="sales")
     items          = db.relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan")
     customer_name  = db.Column(db.String(100), nullable=True)
     customer_phone = db.Column(db.String(20),  nullable=True)
     payment_status = db.Column(db.String(20),  default='paid')
+
     def to_dict(self):
         return {
             "id":             self.id,
@@ -48,13 +77,14 @@ class Sale(db.Model):
             "amount_paid":    float(self.amount_paid),
             "change_given":   float(self.change_given),
             "payment_method": self.payment_method,
-            "sale_date":      self.sale_date.isoformat() + "Z",
+            "sale_date":      iso_utc(self.sale_date),
             "user":           self.seller.username if self.seller else None,
             "customer_name":  self.customer_name,
             "customer_phone": self.customer_phone,
             "payment_status": self.payment_status,
             "items":          [item.to_dict() for item in self.items],
         }
+
 
 class SaleItem(db.Model):
     __tablename__ = "sale_items"
@@ -65,7 +95,9 @@ class SaleItem(db.Model):
     quantity   = db.Column(db.Numeric(10, 2), nullable=False)
     price      = db.Column(db.Numeric(10, 2), nullable=False)
     profit     = db.Column(db.Numeric(10, 2), nullable=False)
+
     sale = db.relationship("Sale", back_populates="items")
+
     def to_dict(self):
         return {
             "product_id": self.product_id,
@@ -74,6 +106,7 @@ class SaleItem(db.Model):
             "price":      float(self.price),
             "profit":     float(self.profit),
         }
+
 
 class Product(db.Model):
     __tablename__ = "products"
@@ -85,6 +118,7 @@ class Product(db.Model):
     stock      = db.Column(db.Numeric(10, 2), nullable=False)
     barcode    = db.Column(db.String, nullable=True, unique=True, index=True)
     sold_loose = db.Column(db.Boolean, default=False, nullable=False)
+
     def to_dict(self):
         return {
             "id":         self.id,
@@ -97,6 +131,7 @@ class Product(db.Model):
             "sold_loose": self.sold_loose,
         }
 
+
 class Supplier(db.Model):
     __tablename__ = 'suppliers'
     id         = db.Column(db.Integer, primary_key=True)
@@ -104,7 +139,8 @@ class Supplier(db.Model):
     phone      = db.Column(db.String(20), nullable=False)
     email      = db.Column(db.String(120), nullable=True)
     address    = db.Column(db.String(200), nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=utc_now)
+
     def to_dict(self):
         return {
             "id":         self.id,
@@ -112,8 +148,9 @@ class Supplier(db.Model):
             "phone":      self.phone,
             "email":      self.email,
             "address":    self.address,
-            "created_at": self.created_at.isoformat() + "Z",
+            "created_at": iso_utc(self.created_at),
         }
+
 
 class Expense(db.Model):
     __tablename__ = 'expenses'
@@ -122,9 +159,10 @@ class Expense(db.Model):
     amount       = db.Column(db.Numeric(10, 2), nullable=False)
     category     = db.Column(db.String(80),   nullable=False)
     department   = db.Column(db.String(20),   nullable=False, default='shop')
-    expense_date = db.Column(db.DateTime,     nullable=False, default=lambda: datetime.now(timezone.utc))
+    expense_date = db.Column(db.DateTime,     nullable=False, default=utc_now)
     recorded_by  = db.Column(db.Integer,      db.ForeignKey('users.id'), nullable=True)
-    created_at   = db.Column(db.DateTime,     default=lambda: datetime.now(timezone.utc))
+    created_at   = db.Column(db.DateTime,     default=utc_now)
+
     def to_dict(self):
         return {
             "id":           self.id,
@@ -132,10 +170,11 @@ class Expense(db.Model):
             "amount":       float(self.amount),
             "category":     self.category,
             "department":   self.department,
-            "expense_date": self.expense_date.isoformat() + "Z",
+            "expense_date": iso_utc(self.expense_date),
             "recorded_by":  self.recorded_by,
-            "created_at":   self.created_at.isoformat() + "Z",
+            "created_at":   iso_utc(self.created_at),
         }
+
 
 class MpesaTransaction(db.Model):
     __tablename__ = 'mpesa_transactions'
@@ -148,19 +187,22 @@ class MpesaTransaction(db.Model):
     mpesa_receipt_number  = db.Column(db.String(100), nullable=True)
     phone_number          = db.Column(db.String(20), nullable=True)
     transaction_date      = db.Column(db.String(50), nullable=True)
-    created_at            = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at            = db.Column(db.DateTime, default=utc_now)
     sender_first_name     = db.Column(db.String(100), nullable=True)
     sender_middle_name    = db.Column(db.String(100), nullable=True)
     sender_last_name      = db.Column(db.String(100), nullable=True)
     linked_transaction_id = db.Column(db.String(100), nullable=True, index=True)
+
     @property
     def sender_full_name(self):
         parts = [self.sender_first_name, self.sender_middle_name, self.sender_last_name]
         full  = " ".join(p for p in parts if p).strip()
         return full if full else (self.phone_number or "Unknown")
+
     @property
     def is_claimed(self):
         return self.linked_transaction_id is not None
+
     def to_dict(self):
         return {
             "id":                    self.id,
@@ -171,7 +213,7 @@ class MpesaTransaction(db.Model):
             "mpesa_receipt_number":  self.mpesa_receipt_number,
             "phone_number":          self.phone_number,
             "transaction_date":      self.transaction_date,
-            "created_at":            self.created_at.isoformat(),
+            "created_at":            iso_utc(self.created_at),
             "status":                "success" if self.result_code == 0 else "failed",
             "sender_first_name":     self.sender_first_name,
             "sender_middle_name":    self.sender_middle_name,
@@ -180,23 +222,29 @@ class MpesaTransaction(db.Model):
             "linked_transaction_id": self.linked_transaction_id,
         }
 
+
 class DebtPayment(db.Model):
     __tablename__ = 'debt_payments'
     id          = db.Column(db.Integer, primary_key=True)
     sale_id     = db.Column(db.Integer, db.ForeignKey('sales.id'), nullable=False)
     amount      = db.Column(db.Numeric(10, 2), nullable=False)
     method      = db.Column(db.String(20))
-    paid_at     = db.Column(db.DateTime, default=db.func.now())
+    # Switched from db.func.now() (DB-server-local) to utc_now (Python UTC)
+    # to match the rest of the codebase. db.func.now() returns whatever
+    # timezone the DB server runs in — not guaranteed to be UTC.
+    paid_at     = db.Column(db.DateTime, default=utc_now)
     received_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
     def to_dict(self):
         return {
             "id":          self.id,
             "sale_id":     self.sale_id,
             "amount":      float(self.amount),
             "method":      self.method,
-            "paid_at":     self.paid_at.isoformat() + "Z" if self.paid_at else None,
+            "paid_at":     iso_utc(self.paid_at),
             "received_by": self.received_by,
         }
+
 
 class CashAdvance(db.Model):
     __tablename__ = 'cash_advances'
@@ -207,9 +255,10 @@ class CashAdvance(db.Model):
     amount_returned = db.Column(db.Numeric(10, 2), default=0)
     status          = db.Column(db.String(20),    default='pending')
     department      = db.Column(db.String(20),    default='shop')
-    taken_at        = db.Column(db.DateTime,      default=lambda: datetime.now(timezone.utc))
+    taken_at        = db.Column(db.DateTime,      default=utc_now)
     returned_at     = db.Column(db.DateTime,      nullable=True)
     recorded_by     = db.Column(db.Integer,       db.ForeignKey('users.id'), nullable=True)
+
     def to_dict(self):
         amount          = float(self.amount)
         amount_returned = float(self.amount_returned) if self.amount_returned else 0.0
@@ -222,7 +271,7 @@ class CashAdvance(db.Model):
             'amount_owed':     round(amount - amount_returned, 2),
             'status':          self.status,
             'department':      self.department,
-            'taken_at':        self.taken_at.isoformat() if self.taken_at else None,
-            'returned_at':     self.returned_at.isoformat() if self.returned_at else None,
+            'taken_at':        iso_utc(self.taken_at),
+            'returned_at':     iso_utc(self.returned_at),
             'recorded_by':     self.recorded_by,
         }
