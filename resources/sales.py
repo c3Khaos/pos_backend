@@ -6,28 +6,15 @@ from datetime import datetime, timezone
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 
-HARDWARE_CATEGORY = 'Hardware & Utilities'
-
-
-def get_hardware_sale_ids():
-    rows = db.session.query(SaleItem.sale_id).join(
-        Product, SaleItem.product_id == Product.id
-    ).filter(
-        Product.category == HARDWARE_CATEGORY
-    ).distinct().all()
-    return [row[0] for row in rows]
-
 
 class SaleListResource(Resource):
 
     @jwt_required()
     def get(self):
         current_user_id = int(get_jwt_identity())
-        hw_ids = get_hardware_sale_ids()
-        query  = Sale.query.filter_by(user_id=current_user_id)
-        if hw_ids:
-            query = query.filter(~Sale.id.in_(hw_ids))
-        sales = query.order_by(Sale.sale_date.desc()).all()
+        sales = Sale.query.filter_by(
+            user_id=current_user_id
+        ).order_by(Sale.sale_date.desc()).all()
         return [sale.to_dict() for sale in sales], 200
 
     @jwt_required()
@@ -36,8 +23,7 @@ class SaleListResource(Resource):
         if not user_id:
             return {"error": "Unauthorized. Please log in."}, 401
 
-        data = request.get_json()
-
+        data           = request.get_json()
         transaction_id = data.get('transaction_id')
         items_data     = data.get('items')
         total_amount   = data.get('total_amount')
@@ -68,7 +54,7 @@ class SaleListResource(Resource):
                 return {"message": "Amount paid is insufficient."}, 400
 
         try:
-            # ── Idempotency Check: Don't process duplicates from double-clicks or offline sync retries ──
+            # ── Idempotency check ─────────────────────────────────────────
             existing_sale = Sale.query.filter_by(transaction_id=transaction_id).first()
             if existing_sale:
                 return existing_sale.to_dict(), 200
@@ -86,7 +72,7 @@ class SaleListResource(Resource):
                 product_name        = item_data.get('name')
                 quantity            = item_data.get('quantity')
                 price_from_frontend = item_data.get('price')
-                sale_type           = item_data.get('sale_type', 'retail')  # retail|wholesale
+                sale_type           = item_data.get('sale_type', 'retail')
 
                 if not product_id or not product_name or not quantity or price_from_frontend is None:
                     raise ValueError("Invalid item data within sale.")
@@ -95,35 +81,27 @@ class SaleListResource(Resource):
                 if not product:
                     raise ValueError(f"Product {product_id} not found")
 
-                # ── 1. Determine Units To Deduct & Calculate Watertight Margins ──
+                # ── Stock deduction + profit calculation ──────────────────
                 if sale_type == 'wholesale' and product.carton_qty:
-                    # Quantity field here stands for total cartons bought
-                    units_to_deduct = quantity * product.carton_qty
-                    
-                    # Total incoming revenue for this specific carton batch
-                    total_revenue = price_from_frontend * quantity
-                    
-                    # Exact baseline buying cost of all individual packets inside those cartons
-                    total_buying_cost = units_to_deduct * product.unit_price
-                    
-                    # Net Wholesale Profit
-                    profit = total_revenue - total_buying_cost
+                    # quantity = number of cartons
+                    # deduct: quantity × carton_qty packets
+                    units_to_deduct = quantity * int(product.carton_qty)
+                    total_revenue   = price_from_frontend * quantity
+                    total_cost      = units_to_deduct * float(product.unit_price)
+                    profit          = total_revenue - total_cost
                 else:
-                    # Quantity field here stands for individual loose piece count
+                    # quantity = number of loose pieces
                     units_to_deduct = quantity
-                    
-                    # Net Retail Profit: (Selling Piece Price - Original Buying Piece Price) * Piece Count
-                    profit = (price_from_frontend - product.unit_price) * quantity
+                    profit          = (price_from_frontend - float(product.unit_price)) * quantity
 
-                # ── 2. Run Database Stock Allocation Checks ──
-                if product.stock < units_to_deduct:
+                if float(product.stock) < units_to_deduct:
                     carton_info = (
-                        f" ({product.stock // product.carton_qty} cartons available)"
+                        f" ({int(float(product.stock)) // int(product.carton_qty)} cartons available)"
                         if product.carton_qty else ""
                     )
                     return {
                         "message": f"Not enough stock for {product.name}. "
-                                   f"Available: {product.stock} packets{carton_info}"
+                                   f"Available: {int(float(product.stock))} pcs{carton_info}"
                     }, 409
 
                 validated_items.append({
@@ -135,7 +113,7 @@ class SaleListResource(Resource):
                     "sale_type":       sale_type,
                 })
 
-            # ── 3. Initialize and flush parent invoice structure ──
+            # ── Create Sale ───────────────────────────────────────────────
             new_sale = Sale(
                 transaction_id = transaction_id,
                 total_amount   = total_amount,
@@ -148,16 +126,13 @@ class SaleListResource(Resource):
                 customer_phone = customer_phone,
                 payment_status = payment_status,
             )
-
             db.session.add(new_sale)
-            db.session.flush()  # Populates new_sale.id safely before appending child line rows
+            db.session.flush()
 
-            # ── 4. Save audit log item arrays and decrement stock ──
+            # ── Create SaleItems + deduct stock ───────────────────────────
             for item in validated_items:
                 product = item["product"]
-
-                # Deduct correct quantity tracking pieces from database inventory records
-                product.stock -= item["units_to_deduct"]
+                product.stock = float(product.stock) - item["units_to_deduct"]
 
                 sale_item = SaleItem(
                     sale_id    = new_sale.id,
@@ -185,4 +160,4 @@ class SaleListResource(Resource):
 
         except Exception as e:
             db.session.rollback()
-            return {"message": "An unexpected error occurred during sale processing."}, 500
+            return {"message": f"An unexpected error occurred: {str(e)}"}, 500
