@@ -112,7 +112,7 @@ class Product(db.Model):
     carton_qty      = db.Column(db.Integer,        nullable=True)            # 👈 NEW — packets per carton
     stock           = db.Column(db.Numeric(10, 2), nullable=False)           # always in packets
     barcode         = db.Column(db.String,         nullable=True, unique=True, index=True)
-    sold_loose      = db.Column(db.Boolean,        default=False, nullable=False)
+    sold_loose      = db.Column(db.Boolean,        default=False, nullable=True)
 
     def to_dict(self):
         return {
