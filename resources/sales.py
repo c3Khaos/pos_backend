@@ -1,4 +1,3 @@
-from decimal import Decimal
 from flask import request
 from flask_restful import Resource
 from models import Sale, SaleItem, Product
@@ -6,23 +5,26 @@ from extensions import db
 from datetime import datetime, timezone
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
-from constants import HARDWARE_CATEGORIES
+
+HARDWARE_CATEGORY = 'Hardware & Utilities'
+
 
 def get_hardware_sale_ids():
-    """Returns list of sale IDs that contain hardware products."""
     rows = db.session.query(SaleItem.sale_id).join(
         Product, SaleItem.product_id == Product.id
     ).filter(
-        Product.category.in_(HARDWARE_CATEGORIES)
+        Product.category == HARDWARE_CATEGORY
     ).distinct().all()
     return [row[0] for row in rows]
 
+
 class SaleListResource(Resource):
+
     @jwt_required()
     def get(self):
         current_user_id = int(get_jwt_identity())
         hw_ids = get_hardware_sale_ids()
-        query = Sale.query.filter_by(user_id=current_user_id)
+        query  = Sale.query.filter_by(user_id=current_user_id)
         if hw_ids:
             query = query.filter(~Sale.id.in_(hw_ids))
         sales = query.order_by(Sale.sale_date.desc()).all()
@@ -33,7 +35,9 @@ class SaleListResource(Resource):
         user_id = int(get_jwt_identity())
         if not user_id:
             return {"error": "Unauthorized. Please log in."}, 401
+
         data = request.get_json()
+
         transaction_id = data.get('transaction_id')
         items_data     = data.get('items')
         total_amount   = data.get('total_amount')
@@ -42,57 +46,83 @@ class SaleListResource(Resource):
         sale_date_str  = data.get('sale_date')
         customer_name  = data.get('customer_name')
         customer_phone = data.get('customer_phone')
+
         if not transaction_id:
             return {"message": "Missing transaction_id"}, 400
+
         if not items_data or not isinstance(items_data, list) or total_amount is None:
             return {"message": "Invalid sale data. Missing items or amounts."}, 400
-        total_amount = Decimal(str(total_amount))
+
         if payment_method == 'credit':
             if not customer_name or not customer_phone:
                 return {"message": "Customer name and phone are required for credit sales."}, 400
             payment_status = 'unpaid'
-            amount_paid    = Decimal('0')
-            change_given   = Decimal('0')
+            amount_paid    = 0
+            change_given   = 0
         else:
             if amount_paid is None:
                 return {"message": "Amount paid is required."}, 400
-            amount_paid  = Decimal(str(amount_paid))
-            change_given = amount_paid - total_amount
+            change_given   = amount_paid - total_amount
             payment_status = 'paid'
             if change_given < 0:
                 return {"message": "Amount paid is insufficient."}, 400
+
         try:
             existing_sale = Sale.query.filter_by(transaction_id=transaction_id).first()
             if existing_sale:
                 return existing_sale.to_dict(), 200
+
             sale_date = (
                 datetime.fromisoformat(sale_date_str.replace("Z", "+00:00"))
                 if sale_date_str
                 else datetime.now(timezone.utc)
             )
+
             validated_items = []
+
             for item_data in items_data:
                 product_id          = item_data.get('product_id')
                 product_name        = item_data.get('name')
                 quantity            = item_data.get('quantity')
                 price_from_frontend = item_data.get('price')
+                sale_type           = item_data.get('sale_type', 'retail')  # 👈 retail|wholesale
+
                 if not product_id or not product_name or not quantity or price_from_frontend is None:
                     raise ValueError("Invalid item data within sale.")
-                product = db.session.get(Product, product_id)
+
+                product = Product.query.get(product_id)
                 if not product:
                     raise ValueError(f"Product {product_id} not found")
-                quantity            = Decimal(str(quantity))
-                price_from_frontend = Decimal(str(price_from_frontend))
-                if product.stock < quantity:
+
+                # ── Calculate units to deduct from stock ──────────────────
+                if sale_type == 'wholesale' and product.carton_qty:
+                    # Selling cartons — deduct packets
+                    units_to_deduct = quantity * product.carton_qty
+                else:
+                    # Selling retail — deduct packets directly
+                    units_to_deduct = quantity
+
+                if product.stock < units_to_deduct:
+                    carton_info = (
+                        f" ({product.stock // product.carton_qty} cartons available)"
+                        if product.carton_qty else ""
+                    )
                     return {
-                        "message": f"Not enough stock for {product.name}. Available: {product.stock}"
+                        "message": f"Not enough stock for {product.name}. "
+                                   f"Available: {product.stock} packets{carton_info}"
                     }, 409
+
+                profit = (price_from_frontend - product.unit_price) * quantity
+
                 validated_items.append({
-                    "product":  product,
-                    "quantity": quantity,
-                    "price":    price_from_frontend,
-                    "profit":   (price_from_frontend - product.unit_price) * quantity
+                    "product":         product,
+                    "quantity":        quantity,
+                    "price":           price_from_frontend,
+                    "profit":          profit,
+                    "units_to_deduct": units_to_deduct,  # 👈 actual packets to remove
+                    "sale_type":       sale_type,
                 })
+
             new_sale = Sale(
                 transaction_id = transaction_id,
                 total_amount   = total_amount,
@@ -105,32 +135,40 @@ class SaleListResource(Resource):
                 customer_phone = customer_phone,
                 payment_status = payment_status,
             )
+
             db.session.add(new_sale)
             db.session.flush()
+
             for item in validated_items:
-                product  = item["product"]
-                quantity = item["quantity"]
-                product.stock -= quantity
+                product = item["product"]
+
+                # ── Deduct correct packets from stock ─────────────────────
+                product.stock -= item["units_to_deduct"]
+
                 sale_item = SaleItem(
                     sale_id    = new_sale.id,
                     product_id = product.id,
                     name       = product.name,
-                    quantity   = quantity,
+                    quantity   = item["quantity"],
                     price      = item["price"],
-                    profit     = item["profit"]
+                    profit     = item["profit"],
                 )
                 db.session.add(sale_item)
+
             db.session.commit()
             return new_sale.to_dict(), 201
+
         except IntegrityError:
             db.session.rollback()
             existing_sale = Sale.query.filter_by(transaction_id=transaction_id).first()
             if existing_sale:
                 return existing_sale.to_dict(), 200
             return {"message": "Database integrity error"}, 500
+
         except ValueError as e:
             db.session.rollback()
             return {"message": str(e)}, 400
+
         except Exception as e:
             db.session.rollback()
             return {"message": "An unexpected error occurred during sale processing."}, 500

@@ -1,8 +1,8 @@
-"""fresh start
+"""initial schema
 
-Revision ID: 62154f41bc7b
+Revision ID: 16d6fb7bf010
 Revises: 
-Create Date: 2026-04-18 16:29:25.958107
+Create Date: 2026-06-15 12:07:37.297833
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '62154f41bc7b'
+revision = '16d6fb7bf010'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -24,23 +24,28 @@ def upgrade():
     sa.Column('checkout_request_id', sa.String(length=100), nullable=True),
     sa.Column('result_code', sa.Integer(), nullable=True),
     sa.Column('result_desc', sa.String(length=255), nullable=True),
-    sa.Column('amount', sa.Float(), nullable=True),
+    sa.Column('amount', sa.Numeric(precision=10, scale=2), nullable=True),
     sa.Column('mpesa_receipt_number', sa.String(length=100), nullable=True),
     sa.Column('phone_number', sa.String(length=20), nullable=True),
     sa.Column('transaction_date', sa.String(length=50), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('sender_first_name', sa.String(length=100), nullable=True),
+    sa.Column('sender_middle_name', sa.String(length=100), nullable=True),
+    sa.Column('sender_last_name', sa.String(length=100), nullable=True),
+    sa.Column('linked_transaction_id', sa.String(length=100), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('mpesa_transactions', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_mpesa_transactions_checkout_request_id'), ['checkout_request_id'], unique=False)
+        batch_op.create_index(batch_op.f('ix_mpesa_transactions_linked_transaction_id'), ['linked_transaction_id'], unique=False)
 
     op.create_table('products',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=80), nullable=False),
     sa.Column('category', sa.String(length=80), nullable=False),
-    sa.Column('price', sa.Float(), nullable=False),
-    sa.Column('unit_price', sa.Float(), nullable=False),
-    sa.Column('stock', sa.Integer(), nullable=False),
+    sa.Column('price', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('unit_price', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('stock', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('barcode', sa.String(), nullable=True),
     sa.Column('sold_loose', sa.Boolean(), nullable=False),
     sa.PrimaryKeyConstraint('id')
@@ -68,11 +73,26 @@ def upgrade():
     sa.UniqueConstraint('email'),
     sa.UniqueConstraint('username')
     )
+    op.create_table('cash_advances',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('person_name', sa.String(length=100), nullable=False),
+    sa.Column('amount', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('reason', sa.String(length=255), nullable=True),
+    sa.Column('amount_returned', sa.Numeric(precision=10, scale=2), nullable=True),
+    sa.Column('status', sa.String(length=20), nullable=True),
+    sa.Column('department', sa.String(length=20), nullable=True),
+    sa.Column('taken_at', sa.DateTime(), nullable=True),
+    sa.Column('returned_at', sa.DateTime(), nullable=True),
+    sa.Column('recorded_by', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['recorded_by'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('expenses',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('description', sa.String(length=200), nullable=False),
-    sa.Column('amount', sa.Float(), nullable=False),
+    sa.Column('amount', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('category', sa.String(length=80), nullable=False),
+    sa.Column('department', sa.String(length=20), nullable=False),
     sa.Column('expense_date', sa.DateTime(), nullable=False),
     sa.Column('recorded_by', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
@@ -82,26 +102,41 @@ def upgrade():
     op.create_table('sales',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('transaction_id', sa.String(length=100), nullable=True),
-    sa.Column('total_amount', sa.Float(), nullable=False),
-    sa.Column('amount_paid', sa.Float(), nullable=False),
-    sa.Column('change_given', sa.Float(), nullable=False),
+    sa.Column('total_amount', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('amount_paid', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('change_given', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('payment_method', sa.String(length=50), nullable=False),
     sa.Column('sale_date', sa.DateTime(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=True),
+    sa.Column('customer_name', sa.String(length=100), nullable=True),
+    sa.Column('customer_phone', sa.String(length=20), nullable=True),
+    sa.Column('payment_status', sa.String(length=20), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('sales', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_sales_transaction_id'), ['transaction_id'], unique=True)
 
+    op.create_table('debt_payments',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('sale_id', sa.Integer(), nullable=False),
+    sa.Column('amount', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('method', sa.String(length=20), nullable=True),
+    sa.Column('paid_at', sa.DateTime(), nullable=True),
+    sa.Column('received_by', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['received_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['sale_id'], ['sales.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('sale_items',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('sale_id', sa.Integer(), nullable=False),
     sa.Column('product_id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=120), nullable=False),
-    sa.Column('quantity', sa.Float(), nullable=False),
-    sa.Column('price', sa.Float(), nullable=False),
-    sa.Column('profit', sa.Float(), nullable=False),
+    sa.Column('quantity', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('price', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('profit', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.ForeignKeyConstraint(['product_id'], ['products.id'], ),
     sa.ForeignKeyConstraint(['sale_id'], ['sales.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -111,11 +146,13 @@ def upgrade():
 def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_table('sale_items')
+    op.drop_table('debt_payments')
     with op.batch_alter_table('sales', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_sales_transaction_id'))
 
     op.drop_table('sales')
     op.drop_table('expenses')
+    op.drop_table('cash_advances')
     op.drop_table('users')
     op.drop_table('suppliers')
     with op.batch_alter_table('products', schema=None) as batch_op:
@@ -123,6 +160,7 @@ def downgrade():
 
     op.drop_table('products')
     with op.batch_alter_table('mpesa_transactions', schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f('ix_mpesa_transactions_linked_transaction_id'))
         batch_op.drop_index(batch_op.f('ix_mpesa_transactions_checkout_request_id'))
 
     op.drop_table('mpesa_transactions')
