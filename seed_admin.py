@@ -13,8 +13,8 @@ with app.app_context():
     else:
         user = User(
             username="chris",
-            email="chege@gmail.com",
-            password_hash=generate_password_hash("chege"),
+            email="chrishege35@gmail.com",
+            password_hash=generate_password_hash("c3khaos"),
             role="admin",   # ← critical
             active=True
         )
