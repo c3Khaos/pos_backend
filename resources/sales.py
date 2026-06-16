@@ -68,6 +68,7 @@ class SaleListResource(Resource):
                 return {"message": "Amount paid is insufficient."}, 400
 
         try:
+            # ── Idempotency Check: Don't process duplicates from double-clicks or offline sync retries ──
             existing_sale = Sale.query.filter_by(transaction_id=transaction_id).first()
             if existing_sale:
                 return existing_sale.to_dict(), 200
@@ -85,7 +86,7 @@ class SaleListResource(Resource):
                 product_name        = item_data.get('name')
                 quantity            = item_data.get('quantity')
                 price_from_frontend = item_data.get('price')
-                sale_type           = item_data.get('sale_type', 'retail')  # 👈 retail|wholesale
+                sale_type           = item_data.get('sale_type', 'retail')  # retail|wholesale
 
                 if not product_id or not product_name or not quantity or price_from_frontend is None:
                     raise ValueError("Invalid item data within sale.")
@@ -94,14 +95,27 @@ class SaleListResource(Resource):
                 if not product:
                     raise ValueError(f"Product {product_id} not found")
 
-                # ── Calculate units to deduct from stock ──────────────────
+                # ── 1. Determine Units To Deduct & Calculate Watertight Margins ──
                 if sale_type == 'wholesale' and product.carton_qty:
-                    # Selling cartons — deduct packets
+                    # Quantity field here stands for total cartons bought
                     units_to_deduct = quantity * product.carton_qty
+                    
+                    # Total incoming revenue for this specific carton batch
+                    total_revenue = price_from_frontend * quantity
+                    
+                    # Exact baseline buying cost of all individual packets inside those cartons
+                    total_buying_cost = units_to_deduct * product.unit_price
+                    
+                    # Net Wholesale Profit
+                    profit = total_revenue - total_buying_cost
                 else:
-                    # Selling retail — deduct packets directly
+                    # Quantity field here stands for individual loose piece count
                     units_to_deduct = quantity
+                    
+                    # Net Retail Profit: (Selling Piece Price - Original Buying Piece Price) * Piece Count
+                    profit = (price_from_frontend - product.unit_price) * quantity
 
+                # ── 2. Run Database Stock Allocation Checks ──
                 if product.stock < units_to_deduct:
                     carton_info = (
                         f" ({product.stock // product.carton_qty} cartons available)"
@@ -112,17 +126,16 @@ class SaleListResource(Resource):
                                    f"Available: {product.stock} packets{carton_info}"
                     }, 409
 
-                profit = (price_from_frontend - product.unit_price) * quantity
-
                 validated_items.append({
                     "product":         product,
                     "quantity":        quantity,
                     "price":           price_from_frontend,
                     "profit":          profit,
-                    "units_to_deduct": units_to_deduct,  # 👈 actual packets to remove
+                    "units_to_deduct": units_to_deduct,
                     "sale_type":       sale_type,
                 })
 
+            # ── 3. Initialize and flush parent invoice structure ──
             new_sale = Sale(
                 transaction_id = transaction_id,
                 total_amount   = total_amount,
@@ -137,12 +150,13 @@ class SaleListResource(Resource):
             )
 
             db.session.add(new_sale)
-            db.session.flush()
+            db.session.flush()  # Populates new_sale.id safely before appending child line rows
 
+            # ── 4. Save audit log item arrays and decrement stock ──
             for item in validated_items:
                 product = item["product"]
 
-                # ── Deduct correct packets from stock ─────────────────────
+                # Deduct correct quantity tracking pieces from database inventory records
                 product.stock -= item["units_to_deduct"]
 
                 sale_item = SaleItem(

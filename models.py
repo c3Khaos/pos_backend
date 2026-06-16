@@ -121,8 +121,8 @@ class Product(db.Model):
             "category":        self.category,
             "price":           float(self.price),
             "unit_price":      float(self.unit_price),
-            "wholesale_price": float(self.wholesale_price) if self.wholesale_price else None,  # 👈 NEW
-            "carton_qty":      self.carton_qty,                                                  # 👈 NEW
+            "wholesale_price": float(self.wholesale_price) if self.wholesale_price else None,  
+            "carton_qty":      self.carton_qty,                                                  # 
             "stock":           float(self.stock),
             "barcode":         self.barcode,
             "sold_loose":      self.sold_loose,
