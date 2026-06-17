@@ -274,3 +274,92 @@ class CashAdvance(db.Model):
             'returned_at':     iso_utc(self.returned_at),
             'recorded_by':     self.recorded_by,
         }
+    
+class StockReturn(db.Model):
+    """Customer returns a product — stock goes back up, refund issued."""
+    __tablename__ = 'stock_returns'
+
+    id          = db.Column(db.Integer,        primary_key=True)
+    sale_id     = db.Column(db.Integer,        db.ForeignKey('sales.id'), nullable=True)
+    product_id  = db.Column(db.Integer,        db.ForeignKey('products.id'), nullable=False)
+    product_name = db.Column(db.String(120),   nullable=False)  # snapshot
+    quantity    = db.Column(db.Integer,        nullable=False)
+    refund_amount = db.Column(db.Numeric(10, 2), nullable=False)
+    reason      = db.Column(db.String(255),    nullable=True)
+    refund_method = db.Column(db.String(20),   default='cash')  # cash | mpesa
+    returned_at = db.Column(db.DateTime,       default=utc_now)
+    recorded_by = db.Column(db.Integer,        db.ForeignKey('users.id'), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id":            self.id,
+            "sale_id":       self.sale_id,
+            "product_id":    self.product_id,
+            "product_name":  self.product_name,
+            "quantity":      self.quantity,
+            "refund_amount": float(self.refund_amount),
+            "reason":        self.reason,
+            "refund_method": self.refund_method,
+            "returned_at":   iso_utc(self.returned_at),
+            "recorded_by":   self.recorded_by,
+        }
+
+
+class Restock(db.Model):
+    """New stock arriving from supplier — stock goes up."""
+    __tablename__ = 'restocks'
+
+    id            = db.Column(db.Integer,        primary_key=True)
+    product_id    = db.Column(db.Integer,        db.ForeignKey('products.id'), nullable=False)
+    product_name  = db.Column(db.String(120),    nullable=False)  # snapshot
+    quantity      = db.Column(db.Integer,        nullable=False)  # in pieces
+    cartons       = db.Column(db.Integer,        nullable=True)   # if entered in cartons
+    cost_per_unit = db.Column(db.Numeric(10, 2), nullable=False)  # buying price at restock
+    total_cost    = db.Column(db.Numeric(10, 2), nullable=False)
+    supplier_id   = db.Column(db.Integer,        db.ForeignKey('suppliers.id'), nullable=True)
+    supplier_name = db.Column(db.String(100),    nullable=True)
+    notes         = db.Column(db.String(255),    nullable=True)
+    restocked_at  = db.Column(db.DateTime,       default=utc_now)
+    recorded_by   = db.Column(db.Integer,        db.ForeignKey('users.id'), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id":            self.id,
+            "product_id":    self.product_id,
+            "product_name":  self.product_name,
+            "quantity":      self.quantity,
+            "cartons":       self.cartons,
+            "cost_per_unit": float(self.cost_per_unit),
+            "total_cost":    float(self.total_cost),
+            "supplier_id":   self.supplier_id,
+            "supplier_name": self.supplier_name,
+            "notes":         self.notes,
+            "restocked_at":  iso_utc(self.restocked_at),
+            "recorded_by":   self.recorded_by,
+        }
+
+
+class CashReconciliation(db.Model):
+    """End of day cash count vs expected."""
+    __tablename__ = 'cash_reconciliations'
+
+    id              = db.Column(db.Integer,        primary_key=True)
+    reconciled_date = db.Column(db.Date,           nullable=False, unique=True)
+    expected_cash   = db.Column(db.Numeric(10, 2), nullable=False)  # from system
+    actual_cash     = db.Column(db.Numeric(10, 2), nullable=False)  # counted
+    difference      = db.Column(db.Numeric(10, 2), nullable=False)  # actual - expected
+    notes           = db.Column(db.String(500),    nullable=True)
+    reconciled_at   = db.Column(db.DateTime,       default=utc_now)
+    reconciled_by   = db.Column(db.Integer,        db.ForeignKey('users.id'), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id":              self.id,
+            "reconciled_date": self.reconciled_date.isoformat(),
+            "expected_cash":   float(self.expected_cash),
+            "actual_cash":     float(self.actual_cash),
+            "difference":      float(self.difference),
+            "notes":           self.notes,
+            "reconciled_at":   iso_utc(self.reconciled_at),
+            "reconciled_by":   self.reconciled_by,
+        }
