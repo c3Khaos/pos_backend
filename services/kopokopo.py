@@ -200,6 +200,9 @@ class KopoKopoService:
 
         # Send the request — note we use cls._headers() which auto-adds the token
         response = requests.post(url, json=data, headers=cls._headers(), timeout=30)
+        # Log Kopo Kopo's response
+        current_app.logger.info(f"KopoKopo Status: {response.status_code}")
+        current_app.logger.info(f"KopoKopo Response: {response.text}")
 
         # SUCCESS CASE — Kopo Kopo returns HTTP 201 (Created)
         # The payment_id is in the "Location" header, not the body!
