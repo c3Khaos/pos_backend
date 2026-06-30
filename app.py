@@ -9,10 +9,10 @@ from config import Config
 
 from resources.products  import ProductListResource, ProductResource, ProductCSVUploadResource
 from resources.sales     import SaleListResource
-from resources.returns   import ReturnListResource, ReturnResource          # 👈 NEW
-from resources.restock   import RestockListResource, RestockResource         # 👈 NEW
-from resources.reconciliation import ReconciliationResource                  # 👈 NEW
-from resources.reports   import ReportsResource                              # 👈 NEW
+from resources.returns   import ReturnListResource, ReturnResource          
+from resources.restock   import RestockListResource, RestockResource         
+from resources.reconciliation import ReconciliationResource                  
+from resources.reports   import ReportsResource                              
 from resources.userActions import UserListResource, UserResource
 from auth import LoginResource, RegisterResource
 from resources.graphs import SalesTrend
@@ -43,7 +43,10 @@ if not CORS_ORIGIN:
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# 1. Initialize global application CORS
 CORS(app, supports_credentials=True, origins=[CORS_ORIGIN])
+
 limiter.init_app(app)
 db.init_app(app)
 migrate.init_app(app, db)
@@ -51,6 +54,9 @@ jwt.init_app(app)
 
 with app.app_context():
     api = Api(app)
+    
+    # 2. Force CORS evaluation directly on the newly created flask_restful instance
+    CORS(api.blueprint, origins=[CORS_ORIGIN], supports_credentials=True)
 
     # ── Products ──────────────────────────────────────────────────────────
     api.add_resource(ProductListResource,          "/products")
@@ -58,21 +64,21 @@ with app.app_context():
     api.add_resource(ProductCSVUploadResource,     "/products/upload-csv")
 
     # ── Sales ─────────────────────────────────────────────────────────────
-    api.add_resource(SaleListResource,             "/sales")
+    api.add_resource(SaleListResource,              "/sales")
 
     # ── Returns ───────────────────────────────────────────────────────────
-    api.add_resource(ReturnListResource,           "/returns")              # 👈 NEW
-    api.add_resource(ReturnResource,               "/returns/<int:return_id>") # 👈 NEW
+    api.add_resource(ReturnListResource,           "/returns")              
+    api.add_resource(ReturnResource,               "/returns/<int:return_id>") 
 
     # ── Restock ───────────────────────────────────────────────────────────
-    api.add_resource(RestockListResource,          "/restock")              # 👈 NEW
-    api.add_resource(RestockResource,              "/restock/<int:restock_id>") # 👈 NEW
+    api.add_resource(RestockListResource,          "/restock")              
+    api.add_resource(RestockResource,              "/restock/<int:restock_id>") 
 
     # ── Reconciliation ────────────────────────────────────────────────────
-    api.add_resource(ReconciliationResource,       "/reconciliation")       # 👈 NEW
+    api.add_resource(ReconciliationResource,       "/reconciliation")       
 
     # ── Reports ───────────────────────────────────────────────────────────
-    api.add_resource(ReportsResource,              "/reports")              # 👈 NEW
+    api.add_resource(ReportsResource,              "/reports")              
 
     # ── Auth + Users ──────────────────────────────────────────────────────
     api.add_resource(RegisterResource,             "/register")
