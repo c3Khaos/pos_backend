@@ -12,9 +12,9 @@ with app.app_context():
         print("Admin already exists")
     else:
         user = User(
-            username="chris",
-            email="chrishege35@gmail.com",
-            password_hash=generate_password_hash("c3khaos"),
+            username="****",
+            email="*******************",
+            password_hash=generate_password_hash("*****"),
             role="admin",   # ← critical
             active=True
         )

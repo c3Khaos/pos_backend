@@ -1,6 +1,6 @@
 from flask import request
 from flask_restful import Resource
-from models import Sale, SaleItem, Product
+from models import Sale, SaleItem, Product,User
 from extensions import db
 from datetime import datetime, timezone
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -12,10 +12,15 @@ class SaleListResource(Resource):
     @jwt_required()
     def get(self):
         current_user_id = int(get_jwt_identity())
-        sales = Sale.query.filter_by(
-            user_id=current_user_id
-        ).order_by(Sale.sale_date.desc()).all()
-        return [sale.to_dict() for sale in sales], 200
+        user = User.query.get(current_user_id)
+        if user and user.role == "admin":
+            sales = Sale.query.order_by(Sale.sale_date.desc()).all()
+        else:
+            sales = Sale.query.filter_by(
+                user_id = current_user_id
+            ).order_by(Sale.sale_date.desc()).all()
+
+        return[sale.to_dict() for sale in sales],200
 
     @jwt_required()
     def post(self):
