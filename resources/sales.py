@@ -37,6 +37,8 @@ class SaleListResource(Resource):
         sale_date_str  = data.get('sale_date')
         customer_name  = data.get('customer_name')
         customer_phone = data.get('customer_phone')
+        cash_portion  = data.get('cash_portion',  None)
+        mpesa_portion = data.get('mpesa_portion', None)
 
         if not transaction_id:
             return {"message": "Missing transaction_id"}, 400
@@ -130,6 +132,8 @@ class SaleListResource(Resource):
                 customer_name  = customer_name,
                 customer_phone = customer_phone,
                 payment_status = payment_status,
+                cash_amount    = Decimal(str(cash_portion))  if cash_portion  else None,
+                mpesa_amount   = Decimal(str(mpesa_portion)) if mpesa_portion else None,
             )
             db.session.add(new_sale)
             db.session.flush()

@@ -56,9 +56,15 @@ class Sale(db.Model):
     customer_phone = db.Column(db.String(20),     nullable=True)
     payment_status = db.Column(db.String(20),     default='paid')
 
-    seller = db.relationship("Sale",     back_populates="sales",  foreign_keys=[user_id])
+    # ── Split payment tracking ────────────────────────────────────────────
+    # For pure cash:  cash_amount = total_amount, mpesa_amount = null
+    # For pure mpesa: cash_amount = null, mpesa_amount = total_amount
+    # For split:      both populated, cash_amount + mpesa_amount = total_amount
+    cash_amount    = db.Column(db.Numeric(10, 2), nullable=True)
+    mpesa_amount   = db.Column(db.Numeric(10, 2), nullable=True)
+
     seller = db.relationship("User",     back_populates="sales")
-    items  = db.relationship("SaleItem", back_populates="sale",   cascade="all, delete-orphan")
+    items  = db.relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan")
 
     def to_dict(self):
         return {
@@ -73,6 +79,8 @@ class Sale(db.Model):
             "customer_name":  self.customer_name,
             "customer_phone": self.customer_phone,
             "payment_status": self.payment_status,
+            "cash_amount":    float(self.cash_amount)  if self.cash_amount  else None,
+            "mpesa_amount":   float(self.mpesa_amount) if self.mpesa_amount else None,
             "items":          [item.to_dict() for item in self.items],
         }
 
@@ -106,11 +114,11 @@ class Product(db.Model):
     id              = db.Column(db.Integer,        primary_key=True)
     name            = db.Column(db.String(80),     nullable=False)
     category        = db.Column(db.String(80),     nullable=False)
-    price           = db.Column(db.Numeric(10, 2), nullable=False)           # retail price
-    unit_price      = db.Column(db.Numeric(10, 2), nullable=False)           # buying/cost price
-    wholesale_price = db.Column(db.Numeric(10, 2), nullable=True)            # 👈 NEW — price per carton
-    carton_qty      = db.Column(db.Integer,        nullable=True)            # 👈 NEW — packets per carton
-    stock           = db.Column(db.Numeric(10, 2), nullable=False)           # always in packets
+    price           = db.Column(db.Numeric(10, 2), nullable=False)
+    unit_price      = db.Column(db.Numeric(10, 2), nullable=False)
+    wholesale_price = db.Column(db.Numeric(10, 2), nullable=True)
+    carton_qty      = db.Column(db.Integer,        nullable=True)
+    stock           = db.Column(db.Numeric(10, 2), nullable=False)
     barcode         = db.Column(db.String,         nullable=True, unique=True, index=True)
     sold_loose      = db.Column(db.Boolean,        default=False, nullable=True)
 
@@ -121,8 +129,8 @@ class Product(db.Model):
             "category":        self.category,
             "price":           float(self.price),
             "unit_price":      float(self.unit_price),
-            "wholesale_price": float(self.wholesale_price) if self.wholesale_price else None,  
-            "carton_qty":      self.carton_qty,                                                  # 
+            "wholesale_price": float(self.wholesale_price) if self.wholesale_price else None,
+            "carton_qty":      self.carton_qty,
             "stock":           float(self.stock),
             "barcode":         self.barcode,
             "sold_loose":      self.sold_loose,
@@ -132,12 +140,12 @@ class Product(db.Model):
 class Supplier(db.Model):
     __tablename__ = 'suppliers'
 
-    id         = db.Column(db.Integer,    primary_key=True)
+    id         = db.Column(db.Integer,     primary_key=True)
     name       = db.Column(db.String(100), nullable=False)
     phone      = db.Column(db.String(20),  nullable=False)
     email      = db.Column(db.String(120), nullable=True)
     address    = db.Column(db.String(200), nullable=True)
-    created_at = db.Column(db.DateTime,   default=utc_now)
+    created_at = db.Column(db.DateTime,    default=utc_now)
 
     def to_dict(self):
         return {
@@ -274,21 +282,22 @@ class CashAdvance(db.Model):
             'returned_at':     iso_utc(self.returned_at),
             'recorded_by':     self.recorded_by,
         }
-    
+
+
 class StockReturn(db.Model):
     """Customer returns a product — stock goes back up, refund issued."""
     __tablename__ = 'stock_returns'
 
-    id          = db.Column(db.Integer,        primary_key=True)
-    sale_id     = db.Column(db.Integer,        db.ForeignKey('sales.id'), nullable=True)
-    product_id  = db.Column(db.Integer,        db.ForeignKey('products.id'), nullable=False)
-    product_name = db.Column(db.String(120),   nullable=False)  # snapshot
-    quantity    = db.Column(db.Integer,        nullable=False)
+    id            = db.Column(db.Integer,        primary_key=True)
+    sale_id       = db.Column(db.Integer,        db.ForeignKey('sales.id'), nullable=True)
+    product_id    = db.Column(db.Integer,        db.ForeignKey('products.id'), nullable=False)
+    product_name  = db.Column(db.String(120),    nullable=False)
+    quantity      = db.Column(db.Integer,        nullable=False)
     refund_amount = db.Column(db.Numeric(10, 2), nullable=False)
-    reason      = db.Column(db.String(255),    nullable=True)
-    refund_method = db.Column(db.String(20),   default='cash')  # cash | mpesa
-    returned_at = db.Column(db.DateTime,       default=utc_now)
-    recorded_by = db.Column(db.Integer,        db.ForeignKey('users.id'), nullable=True)
+    reason        = db.Column(db.String(255),    nullable=True)
+    refund_method = db.Column(db.String(20),     default='cash')
+    returned_at   = db.Column(db.DateTime,       default=utc_now)
+    recorded_by   = db.Column(db.Integer,        db.ForeignKey('users.id'), nullable=True)
 
     def to_dict(self):
         return {
@@ -311,10 +320,10 @@ class Restock(db.Model):
 
     id            = db.Column(db.Integer,        primary_key=True)
     product_id    = db.Column(db.Integer,        db.ForeignKey('products.id'), nullable=False)
-    product_name  = db.Column(db.String(120),    nullable=False)  # snapshot
-    quantity      = db.Column(db.Integer,        nullable=False)  # in pieces
-    cartons       = db.Column(db.Integer,        nullable=True)   # if entered in cartons
-    cost_per_unit = db.Column(db.Numeric(10, 2), nullable=False)  # buying price at restock
+    product_name  = db.Column(db.String(120),    nullable=False)
+    quantity      = db.Column(db.Integer,        nullable=False)
+    cartons       = db.Column(db.Integer,        nullable=True)
+    cost_per_unit = db.Column(db.Numeric(10, 2), nullable=False)
     total_cost    = db.Column(db.Numeric(10, 2), nullable=False)
     supplier_id   = db.Column(db.Integer,        db.ForeignKey('suppliers.id'), nullable=True)
     supplier_name = db.Column(db.String(100),    nullable=True)
@@ -345,9 +354,9 @@ class CashReconciliation(db.Model):
 
     id              = db.Column(db.Integer,        primary_key=True)
     reconciled_date = db.Column(db.Date,           nullable=False, unique=True)
-    expected_cash   = db.Column(db.Numeric(10, 2), nullable=False)  # from system
-    actual_cash     = db.Column(db.Numeric(10, 2), nullable=False)  # counted
-    difference      = db.Column(db.Numeric(10, 2), nullable=False)  # actual - expected
+    expected_cash   = db.Column(db.Numeric(10, 2), nullable=False)
+    actual_cash     = db.Column(db.Numeric(10, 2), nullable=False)
+    difference      = db.Column(db.Numeric(10, 2), nullable=False)
     notes           = db.Column(db.String(500),    nullable=True)
     reconciled_at   = db.Column(db.DateTime,       default=utc_now)
     reconciled_by   = db.Column(db.Integer,        db.ForeignKey('users.id'), nullable=True)

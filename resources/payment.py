@@ -8,6 +8,24 @@ from extensions import db
 from services.kopokopo import KopoKopoService
 
 
+def _expected_mpesa_amount(sale):
+    """
+    Returns the amount we expect M-Pesa to confirm for this sale.
+
+    - Split payment (cash + mpesa): compare against mpesa_amount only
+    - Pure M-Pesa:                  compare against total_amount
+    - Fallback:                     compare against total_amount
+
+    This is the fix for the AMOUNT MISMATCH bug on split payments.
+    Previously the callback always compared paid_amount against
+    total_amount, so a KSh 5 M-Pesa payment on a KSh 350 sale
+    (with KSh 345 cash) always triggered 'amount_mismatch'.
+    """
+    if sale.mpesa_amount is not None:
+        return sale.mpesa_amount
+    return sale.total_amount
+
+
 class PaymentResource(Resource):
     """POST /payments — initiate STK Push"""
     @jwt_required()
@@ -98,9 +116,15 @@ class PaymentCallbackResource(Resource):
                 sale = Sale.query.filter_by(transaction_id=transaction_id).first()
                 if sale:
                     paid_amount = Decimal(str(amount)) if amount else Decimal('0')
-                    if abs(paid_amount - sale.total_amount) > Decimal('0.01'):
+                    # ── FIX: compare against mpesa_amount for split payments ──
+                    expected = _expected_mpesa_amount(sale)
+                    if abs(paid_amount - expected) > Decimal('0.01'):
                         current_app.logger.error(
-                            f"AMOUNT MISMATCH: expected={sale.total_amount} got={paid_amount}"
+                            f"AMOUNT MISMATCH: expected={expected} "
+                            f"got={paid_amount} "
+                            f"(total={sale.total_amount}, "
+                            f"cash={sale.cash_amount}, "
+                            f"mpesa={sale.mpesa_amount})"
                         )
                         sale.payment_status = 'amount_mismatch'
                     else:
@@ -127,21 +151,21 @@ class MpesaWebhookResource(Resource):
     Handles buygoods_transaction_received AND incoming_payment results
     """
     def post(self):
-         signature = request.headers.get('X-KopoKopo-Signature', '')
-         if not KopoKopoService.verify_webhook(request.get_data(), signature):
-             current_app.logger.warning("Invalid webhook signature")
-             return {"message": "Invalid signature"}, 401
+        signature = request.headers.get('X-KopoKopo-Signature', '')
+        if not KopoKopoService.verify_webhook(request.get_data(), signature):
+            current_app.logger.warning("Invalid webhook signature")
+            return {"message": "Invalid signature"}, 401
 
-         data = request.get_json()
-         current_app.logger.info(f"WEBHOOK RECEIVED: {data}")
+        data = request.get_json()
+        current_app.logger.info(f"WEBHOOK RECEIVED: {data}")
 
-         if 'topic' in data:
-             return self._handle_buygoods(data)
-         elif data.get('data', {}).get('type') == 'incoming_payment':
-             return self._handle_stk_result(data)
-         else:
-             current_app.logger.warning("Unknown webhook format received")
-             return {"message": "Unknown webhook type"}, 200
+        if 'topic' in data:
+            return self._handle_buygoods(data)
+        elif data.get('data', {}).get('type') == 'incoming_payment':
+            return self._handle_stk_result(data)
+        else:
+            current_app.logger.warning("Unknown webhook format received")
+            return {"message": "Unknown webhook type"}, 200
 
     def _handle_buygoods(self, data):
         """Handles till payments — manually initiated by customer"""
@@ -227,9 +251,15 @@ class MpesaWebhookResource(Resource):
             if status == 'Success' and transaction_id:
                 sale = Sale.query.filter_by(transaction_id=transaction_id).first()
                 if sale:
-                    if paid_amount is not None and abs(paid_amount - sale.total_amount) > Decimal('0.01'):
+                    # ── FIX: compare against mpesa_amount for split payments ──
+                    expected = _expected_mpesa_amount(sale)
+                    if paid_amount is not None and abs(paid_amount - expected) > Decimal('0.01'):
                         current_app.logger.error(
-                            f"AMOUNT MISMATCH: expected={sale.total_amount} got={paid_amount}"
+                            f"AMOUNT MISMATCH: expected={expected} "
+                            f"got={paid_amount} "
+                            f"(total={sale.total_amount}, "
+                            f"cash={sale.cash_amount}, "
+                            f"mpesa={sale.mpesa_amount})"
                         )
                         sale.payment_status = 'amount_mismatch'
                     else:
@@ -264,15 +294,7 @@ class CheckPaymentStatusResource(Resource):
 class MpesaTransactionListResource(Resource):
     """
     GET /mpesa-transactions
-
-    - ADMIN: full historical log, every transaction, unlimited.
-      Used for reconciliation, audits, exports, disputes.
-
-    - CASHIER: last 50 transactions only — shared till view.
-      MpesaTransaction has no user_id (webhooks don't know which
-      cashier is at the till), so this can't be "my transactions" —
-      it's "recent activity on this till", enough to verify a
-      customer's payment landed without needing admin to check.
+    Admin: full log. Cashier: last 50 only.
     """
     @jwt_required()
     def get(self):
