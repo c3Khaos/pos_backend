@@ -1,11 +1,11 @@
 from flask import request
 from flask_restful import Resource
-from models import Sale, SaleItem, Product,User
+from models import Sale, SaleItem, Product, User
 from extensions import db
 from datetime import datetime, timezone
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
-
+from decimal import Decimal  # ✅ FIXED: Missing import that caused 500 error
 
 class SaleListResource(Resource):
 
@@ -20,7 +20,7 @@ class SaleListResource(Resource):
                 user_id = current_user_id
             ).order_by(Sale.sale_date.desc()).all()
 
-        return[sale.to_dict() for sale in sales],200
+        return [sale.to_dict() for sale in sales], 200
 
     @jwt_required()
     def post(self):
@@ -37,8 +37,8 @@ class SaleListResource(Resource):
         sale_date_str  = data.get('sale_date')
         customer_name  = data.get('customer_name')
         customer_phone = data.get('customer_phone')
-        cash_portion  = data.get('cash_portion',  None)
-        mpesa_portion = data.get('mpesa_portion', None)
+        cash_portion   = data.get('cash_portion',  None)
+        mpesa_portion  = data.get('mpesa_portion', None)
 
         if not transaction_id:
             return {"message": "Missing transaction_id"}, 400
@@ -46,6 +46,10 @@ class SaleListResource(Resource):
         if not items_data or not isinstance(items_data, list) or total_amount is None:
             return {"message": "Invalid sale data. Missing items or amounts."}, 400
 
+        # Convert total_amount to float just in case it came as a string
+        total_amount = float(total_amount)
+
+        # ── Payment Validation ───────────────────────────────────────────
         if payment_method == 'credit':
             if not customer_name or not customer_phone:
                 return {"message": "Customer name and phone are required for credit sales."}, 400
@@ -53,12 +57,21 @@ class SaleListResource(Resource):
             amount_paid    = 0
             change_given   = 0
         else:
+            # ✅ FIXED: If it's a direct M-Pesa, Card, or Split sale where frontend 
+            # passes blank/null cash text input, default amount_paid to total_amount
+            if amount_paid is None or amount_paid == "" or float(amount_paid) == 0:
+                if payment_method in ['mpesa', 'card', 'split', 'm-pesa']:
+                    amount_paid = total_amount
+
             if amount_paid is None:
                 return {"message": "Amount paid is required."}, 400
-            change_given   = amount_paid - total_amount
+            
+            amount_paid  = float(amount_paid)
+            change_given = amount_paid - total_amount
             payment_status = 'paid'
+
             if change_given < 0:
-                return {"message": "Amount paid is insufficient."}, 400
+                return {"message": f"Amount paid (KSh {amount_paid}) is insufficient for total (KSh {total_amount})."}, 400
 
         try:
             # ── Idempotency check ─────────────────────────────────────────
@@ -90,14 +103,11 @@ class SaleListResource(Resource):
 
                 # ── Stock deduction + profit calculation ──────────────────
                 if sale_type == 'wholesale' and product.carton_qty:
-                    # quantity = number of cartons
-                    # deduct: quantity × carton_qty packets
                     units_to_deduct = quantity * int(product.carton_qty)
                     total_revenue   = price_from_frontend * quantity
                     total_cost      = units_to_deduct * float(product.unit_price)
                     profit          = total_revenue - total_cost
                 else:
-                    # quantity = number of loose pieces
                     units_to_deduct = quantity
                     profit          = (price_from_frontend - float(product.unit_price)) * quantity
 
