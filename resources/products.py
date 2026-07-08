@@ -6,25 +6,12 @@ from flask_restful import Resource
 from models import Product, User
 from extensions import db
 
-HARDWARE_CATEGORY = 'Hardware & Utilities'
-
 
 class ProductListResource(Resource):
 
     def get(self):
-        department = request.args.get('department')
-
-        if department == 'hardware':
-            products = Product.query.filter(
-                Product.category == HARDWARE_CATEGORY
-            ).all()
-        elif department == 'shop':
-            products = Product.query.filter(
-                Product.category != HARDWARE_CATEGORY
-            ).all()
-        else:
-            products = Product.query.all()
-
+        # Single shop — no department filtering needed
+        products = Product.query.all()
         return [product.to_dict() for product in products], 200
 
     @jwt_required()
@@ -53,7 +40,6 @@ class ProductListResource(Resource):
         except (TypeError, ValueError):
             return {"message": "Price, unit price and stock must be valid numbers."}, 400
 
-        # ── Wholesale fields — optional ───────────────────────────────────
         parsed_wholesale = None
         parsed_carton    = None
 
@@ -139,7 +125,7 @@ class ProductCSVUploadResource(Resource):
     @jwt_required()
     def post(self):
         user_id = int(get_jwt_identity())
-        user    = User.query.get(user_id)
+        user = User.query.get(user_id)
         if not user or user.role != 'admin':
             return {"message": "Admin access required."}, 403
 
@@ -152,80 +138,105 @@ class ProductCSVUploadResource(Resource):
             return {"message": "File must be a CSV."}, 400
 
         try:
+            # Stream the file lines instead of loading everything raw at once
             stream = io.StringIO(file.stream.read().decode('utf-8'))
             reader = csv.DictReader(stream)
 
-            added   = []
+            # --- OPTIMIZATION: Cache existing database entries into memory sets ---
+            # This turns 2 database calls per CSV row into simple, fast RAM lookups.
+            existing_products = db.session.query(Product.name, Product.category, Product.barcode).all()
+            
+            existing_barcodes = {p.barcode for p in existing_products if p.barcode}
+            existing_combos = {(p.name, p.category) for p in existing_products}
+            # ----------------------------------------------------------------------
+
+            added_count = 0
             skipped = []
-            errors  = []
+            errors = []
+            
+            batch_size = 500
+            current_batch = []
 
             for i, row in enumerate(reader, start=2):
                 try:
-                    name            = row.get('name',            '').strip()
-                    category        = row.get('category',        '').strip()
-                    price           = row.get('price',           '').strip()
-                    unit_price      = row.get('unit_price',      '').strip()
-                    stock           = row.get('stock',           '').strip()
-                    barcode         = row.get('barcode',         '').strip() or None
+                    name = row.get('name', '').strip()
+                    category = row.get('category', '').strip()
+                    price = row.get('price', '').strip()
+                    unit_price = row.get('unit_price', '').strip()
+                    stock = row.get('stock', '').strip()
+                    barcode = row.get('barcode', '').strip() or None
                     wholesale_price = row.get('wholesale_price', '').strip() or None
-                    carton_qty      = row.get('carton_qty',      '').strip() or None
+                    carton_qty = row.get('carton_qty', '').strip() or None
 
                     if not name or not category or not price or not unit_price or not stock:
                         errors.append(f"Row {i}: missing required fields — skipped")
+                        current_batch = []  # Clear tracking
                         continue
 
-                    price      = float(price)
+                    price = float(price)
                     unit_price = float(unit_price)
-                    stock      = int(stock)
+                    stock = int(stock)
 
                     if price <= 0 or unit_price <= 0 or stock < 0:
                         errors.append(f"Row {i}: invalid price/stock values — skipped")
                         continue
 
                     parsed_wholesale = float(wholesale_price) if wholesale_price else None
-                    parsed_carton    = int(carton_qty)        if carton_qty      else None
+                    parsed_carton = int(carton_qty) if carton_qty else None
 
-                    if barcode:
-                        existing = Product.query.filter_by(barcode=barcode).first()
-                        if existing:
-                            skipped.append(f"Row {i}: barcode {barcode} already exists — skipped")
-                            continue
+                    # Fast RAM duplicate checking
+                    if barcode and barcode in existing_barcodes:
+                        skipped.append(f"Row {i}: barcode {barcode} already exists — skipped")
+                        continue
 
-                    existing_name = Product.query.filter_by(
-                        name=name, category=category
-                    ).first()
-                    if existing_name:
+                    if (name, category) in existing_combos:
                         skipped.append(f"Row {i}: '{name}' in '{category}' already exists — skipped")
                         continue
 
+                    # Prep object instantiation mapping
                     product = Product(
-                        name            = name,
-                        category        = category,
-                        price           = price,
-                        unit_price      = unit_price,
-                        wholesale_price = parsed_wholesale,
-                        carton_qty      = parsed_carton,
-                        stock           = stock,
-                        barcode         = barcode,
-                        sold_loose      = False,
+                        name=name,
+                        category=category,
+                        price=price,
+                        unit_price=unit_price,
+                        wholesale_price=parsed_wholesale,
+                        carton_qty=parsed_carton,
+                        stock=stock,
+                        barcode=barcode,
+                        sold_loose=False,
                     )
+                    
                     db.session.add(product)
-                    added.append(name)
+                    
+                    # Track newly added elements for subsequent duplicate lines within the same CSV
+                    if barcode:
+                        existing_barcodes.add(barcode)
+                    existing_combos.add((name, category))
+                    
+                    added_count += 1
+                    current_batch.append(product)
+
+                    # Periodically flush data to DB to keep RAM usage low
+                    if len(current_batch) >= batch_size:
+                        db.session.commit()
+                        current_batch = []
 
                 except (ValueError, KeyError) as e:
                     errors.append(f"Row {i}: {str(e)} — skipped")
                     continue
 
-            db.session.commit()
+            # Final commit for remaining rows
+            if current_batch:
+                db.session.commit()
 
             return {
-                "message": f"Upload complete! {len(added)} products added.",
-                "added":   len(added),
+                "message": f"Upload complete! {added_count} products added.",
+                "added": added_count,
                 "skipped": len(skipped),
-                "errors":  len(errors),
+                "errors": len(errors),
                 "details": {
                     "skipped": skipped[:10],
-                    "errors":  errors[:10],
+                    "errors": errors[:10],
                 }
             }, 201
 
