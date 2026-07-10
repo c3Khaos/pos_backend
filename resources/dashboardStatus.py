@@ -1,3 +1,4 @@
+from flask import request
 from flask_restful import Resource
 from models import User, SaleItem, Product, Sale, Expense, CashAdvance, db
 from sqlalchemy import func
@@ -13,6 +14,7 @@ def hardware_sale_ids_subquery():
     ).distinct().subquery()
 
 class DashboardInfo(Resource):
+    
     @jwt_required()
     def get(self):
         try:
@@ -23,26 +25,34 @@ class DashboardInfo(Resource):
             today_end   = today_start + timedelta(days=1)
             month_start = datetime(now_eat.year, now_eat.month, 1,
                                    tzinfo=timezone.utc) - eat_offset
+            
             hw_ids = hardware_sale_ids_subquery()
+            
+            # ── Metrics Calculations ──────────────────────────────────────
             total_users = db.session.query(User).count()
+            
             total_products = db.session.query(Product).filter(
                 Product.category.notin_(HARDWARE_CATEGORIES)
             ).count()
+            
             total_profit = db.session.query(func.sum(SaleItem.profit))\
                 .join(Product, SaleItem.product_id == Product.id)\
                 .filter(Product.category.notin_(HARDWARE_CATEGORIES))\
                 .scalar() or 0
+                
             total_sales = db.session.query(
                 func.sum(SaleItem.price * SaleItem.quantity)
             ).join(Product, SaleItem.product_id == Product.id)\
              .filter(Product.category.notin_(HARDWARE_CATEGORIES))\
              .scalar() or 0
+             
             today_sales = db.session.query(func.sum(Sale.total_amount))\
                 .filter(
                     Sale.sale_date >= today_start,
                     Sale.sale_date <  today_end,
                     ~Sale.id.in_(hw_ids)
                 ).scalar() or 0
+                
             today_profit = db.session.query(func.sum(SaleItem.profit))\
                 .join(Sale,    Sale.id    == SaleItem.sale_id)\
                 .join(Product, Product.id == SaleItem.product_id)\
@@ -51,33 +61,41 @@ class DashboardInfo(Resource):
                     Sale.sale_date <  today_end,
                     Product.category.notin_(HARDWARE_CATEGORIES)
                 ).scalar() or 0
+                
             today_expenses = db.session.query(func.sum(Expense.amount))\
                 .filter(
                     Expense.expense_date >= today_start,
                     Expense.expense_date <  today_end,
                     Expense.department   == 'shop'
                 ).scalar() or 0
+                
             month_expenses = db.session.query(func.sum(Expense.amount))\
                 .filter(
                     Expense.expense_date >= month_start,
                     Expense.department   == 'shop'
                 ).scalar() or 0
+                
             total_expenses = db.session.query(func.sum(Expense.amount))\
                 .filter(Expense.department == 'shop')\
                 .scalar() or 0
+                
             low_stock = Product.query.filter(
                 Product.stock    <= 5,
                 Product.category.notin_(HARDWARE_CATEGORIES)
             ).all()
+            
             shop_advances = CashAdvance.query.filter(
                 CashAdvance.status.in_(['pending', 'partial']),
                 CashAdvance.department == 'shop'
             ).all()
+            
             advances_owed  = sum(
                 a.amount - (a.amount_returned or 0)
                 for a in shop_advances
             )
             advances_count = len(shop_advances)
+            
+            # ── Response Return ───────────────────────────────────────────
             return {
                 "total_users":        total_users,
                 "total_products":     total_products,
@@ -95,5 +113,7 @@ class DashboardInfo(Resource):
                 "advances_owed":  round(float(advances_owed), 2),
                 "advances_count": advances_count,
             }, 200
+            
         except Exception as e:
-            return {"message": f"Error fetching stats: {e}"}, 500
+            # ✅ Clean formatting protects CORS headers from breaking on standard exceptions
+            return {"message": f"Error fetching stats: {str(e)}"}, 500
