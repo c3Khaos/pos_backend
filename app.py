@@ -113,8 +113,8 @@ with app.app_context():
     api.add_resource(CashAdvanceReturnResource,    "/advances/<int:advance_id>/return")
     api.add_resource(CashAdvanceSummaryResource,   "/advances/summary")
     # ── Settings ──────────────────────────────────────────────────────────────
-api.add_resource(SettingsResource,        "/settings")
-api.add_resource(ChangePasswordResource,  "/settings/change-password")
+    api.add_resource(SettingsResource,        "/settings")
+    api.add_resource(ChangePasswordResource,  "/settings/change-password")
 
 # ── Health check + cron keepalive ─────────────────────────────────────────────
 @app.route("/")
