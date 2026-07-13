@@ -372,3 +372,27 @@ class CashReconciliation(db.Model):
             "reconciled_at":   iso_utc(self.reconciled_at),
             "reconciled_by":   self.reconciled_by,
         }
+class ShopSettings(db.Model):
+    """One row per shop — singleton table."""
+    __tablename__ = 'shop_settings'
+
+    id                  = db.Column(db.Integer,     primary_key=True)
+    shop_name           = db.Column(db.String(100), nullable=False, default="My Shop")
+    shop_tagline        = db.Column(db.String(200), nullable=True)
+    shop_phone          = db.Column(db.String(20),  nullable=True)
+    shop_address        = db.Column(db.String(200), nullable=True)
+    receipt_footer      = db.Column(db.String(300), nullable=True, default="Thank you for your business!")
+    low_stock_threshold = db.Column(db.Integer,     nullable=False, default=5)
+    updated_at          = db.Column(db.DateTime,    default=utc_now, onupdate=utc_now)
+
+    def to_dict(self):
+        return {
+            "id":                  self.id,
+            "shop_name":           self.shop_name,
+            "shop_tagline":        self.shop_tagline,
+            "shop_phone":          self.shop_phone,
+            "shop_address":        self.shop_address,
+            "receipt_footer":      self.receipt_footer,
+            "low_stock_threshold": self.low_stock_threshold,
+            "updated_at":          iso_utc(self.updated_at),
+        }

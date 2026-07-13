@@ -29,6 +29,7 @@ from resources.advances import (
     CashAdvanceReturnResource,
     CashAdvanceSummaryResource,
 )
+from resources.settings import SettingsResource, ChangePasswordResource
 from resources.suppliers import SupplierListResource, SupplierResource
 from resources.expenses  import ExpenseListResource, ExpenseResource
 from resources.debtors   import DebtorListResource, DebtorDetailResource, DebtorPaymentResource
@@ -111,7 +112,9 @@ with app.app_context():
     api.add_resource(CashAdvanceListResource,      "/advances")
     api.add_resource(CashAdvanceReturnResource,    "/advances/<int:advance_id>/return")
     api.add_resource(CashAdvanceSummaryResource,   "/advances/summary")
-
+    # ── Settings ──────────────────────────────────────────────────────────────
+api.add_resource(SettingsResource,        "/settings")
+api.add_resource(ChangePasswordResource,  "/settings/change-password")
 
 # ── Health check + cron keepalive ─────────────────────────────────────────────
 @app.route("/")
