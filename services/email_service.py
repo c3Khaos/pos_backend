@@ -11,6 +11,7 @@ Required env vars:
 import os
 import logging
 import resend
+from models import User
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +186,7 @@ def _build_html(data: dict) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
-def send_daily_report(data: dict, recipients: list[str]) -> dict:
+def send_daily_report(data: dict) -> dict:
     """
     Send the daily report via Resend HTTPS API.
     Sends one email per recipient with proper error tracking.
@@ -193,6 +194,18 @@ def send_daily_report(data: dict, recipients: list[str]) -> dict:
     api_key    = os.environ.get("RESEND_API_KEY")
     from_email = os.environ.get("MAIL_FROM_EMAIL", "onboarding@resend.dev")
     from_name  = os.environ.get("MAIL_FROM_NAME",  "POS Daily Report")
+    users = (
+    User.query
+    .filter(User.role == "admin",
+            User.active == True)
+    .with_entities(User.email)
+    .all()
+)
+    recipients = [
+    user.email
+    for user in users
+    if user.email
+]
 
     if not api_key:
         logger.error("Missing RESEND_API_KEY — report not sent.")

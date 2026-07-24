@@ -150,37 +150,38 @@ def trigger_daily_report():
 @app.route("/admin/send-report-cron", methods=["POST"])
 def trigger_daily_report_cron():
     expected = os.environ.get("CRON_SECRET")
-    if not expected:
-        return jsonify({"success": False, "message": "CRON_SECRET not configured."}), 500
-    if request.headers.get("Authorization", "") != f"Bearer {expected}":
-        return jsonify({"success": False, "message": "Unauthorized"}), 401
-    try:
-        recipients = get_recipient_emails()
-        if not recipients:
-            return jsonify({"success": False, "message": "No recipients."}), 400
-        data   = get_daily_report_data()
-        result = send_daily_report(data, recipients)
-        return jsonify({
-            "success":    True,
-            "date":       data["date"],
-            "recipients": len(recipients),
-            "sent":       result["sent"],
-            "failed":     result["failed"],
-        }), 200
-    except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
-@jwt.expired_token_loader
-def handle_expired_token_callback(jwt_header, jwt_payload):
-    """
-    Safely intercepts expired JWT tokens, preventing a 500 server crash 
-    and allowing CORS headers to wrap the response naturally.
-    """
-    response = jsonify({
-        "status": 401,
-        "error": "token_expired",
-        "message": "Your login session has expired. Please log in again."
-    })
-    return response, 401
 
+    if not expected:
+        return jsonify({
+            "success": False,
+            "message": "CRON_SECRET not configured."
+        }), 500
+
+    if request.headers.get("Authorization", "") != f"Bearer {expected}":
+        return jsonify({
+            "success": False,
+            "message": "Unauthorized"
+        }), 401
+
+    try:
+        data = get_daily_report_data()
+
+        # send_daily_report now fetches active admin emails internally
+        result = send_daily_report(data)
+
+        return jsonify({
+            "success": True,
+            "date": data["date"],
+            "recipients": result["recipients"],
+            "sent": result["sent"],
+            "failed": result["failed"],
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+    
 if __name__ == "__main__":
     app.run(host="localhost", debug=True, port=5555)
