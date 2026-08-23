@@ -2,25 +2,81 @@ from flask import request
 from flask_restful import Resource
 from models import Sale, SaleItem, Product, User
 from extensions import db
-from datetime import datetime, timezone
+from datetime import datetime, timezone , timedelta
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 from decimal import Decimal  # ✅ FIXED: Missing import that caused 500 error
+from sqlalchemy import func
 
 class SaleListResource(Resource):
 
     @jwt_required()
     def get(self):
         current_user_id = int(get_jwt_identity())
-        user = User.query.get(current_user_id)
-        if user and user.role == "admin":
-            sales = Sale.query.order_by(Sale.sale_date.desc()).all()
-        else:
-            sales = Sale.query.filter_by(
-                user_id = current_user_id
-            ).order_by(Sale.sale_date.desc()).all()
+        user            = User.query.get(current_user_id)
 
-        return [sale.to_dict() for sale in sales], 200
+        # ── Date filtering params ─────────────────────────────────────────
+        period   = request.args.get('period', 'day')
+        date_str = request.args.get('date')
+
+        eat_offset = timedelta(hours=3)
+        now_eat    = datetime.now(timezone.utc) + eat_offset
+
+        # ── Determine date range ──────────────────────────────────────────
+        if period == 'all':
+            start_utc = None
+            end_utc   = None
+        else:
+            if date_str:
+                try:
+                    local_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    local_date = now_eat.date()
+            else:
+                local_date = now_eat.date()
+
+            if period == 'day':
+                local_start = datetime(local_date.year, local_date.month, local_date.day, 0,  0,  0)
+                local_end   = datetime(local_date.year, local_date.month, local_date.day, 23, 59, 59)
+            elif period == 'week':
+                week_start  = local_date - timedelta(days=7)
+                local_start = datetime(week_start.year, week_start.month, week_start.day, 0, 0, 0)
+                local_end   = datetime(local_date.year, local_date.month, local_date.day, 23, 59, 59)
+            elif period == 'month':
+                local_start = datetime(now_eat.year, now_eat.month, 1, 0, 0, 0)
+                local_end   = datetime(local_date.year, local_date.month, local_date.day, 23, 59, 59)
+            else:
+                local_start = datetime(local_date.year, local_date.month, local_date.day, 0,  0,  0)
+                local_end   = datetime(local_date.year, local_date.month, local_date.day, 23, 59, 59)
+
+            start_utc = local_start - eat_offset
+            end_utc   = local_end   - eat_offset
+
+        # ── Build query ───────────────────────────────────────────────────
+        if user and user.role == "admin":
+            query = Sale.query
+        else:
+            query = Sale.query.filter_by(user_id=current_user_id)
+
+        if start_utc and end_utc:
+            query = query.filter(
+                Sale.sale_date >= start_utc,
+                Sale.sale_date <= end_utc,
+            )
+
+        # ── Total revenue for period ──────────────────────────────────────
+        total_count   = query.count()
+        total_revenue = db.session.query(func.sum(Sale.total_amount))\
+            .filter(Sale.id.in_(query.with_entities(Sale.id)))\
+            .scalar() or 0
+
+        sales = query.order_by(Sale.sale_date.desc()).all()
+
+        return {
+            "sales":         [s.to_dict() for s in sales],
+            "total_count":   total_count,
+            "total_revenue": float(total_revenue),
+        }, 200
 
     @jwt_required()
     def post(self):
