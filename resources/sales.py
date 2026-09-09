@@ -2,11 +2,13 @@ from flask import request
 from flask_restful import Resource
 from models import Sale, SaleItem, Product, User
 from extensions import db
-from datetime import datetime, timezone , timedelta
+from datetime import datetime, timezone, timedelta
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
-from decimal import Decimal  # ✅ FIXED: Missing import that caused 500 error
+from sqlalchemy.orm import joinedload          # 👈 NEW — for eager loading
+from decimal import Decimal
 from sqlalchemy import func
+
 
 class SaleListResource(Resource):
 
@@ -64,13 +66,15 @@ class SaleListResource(Resource):
                 Sale.sale_date <= end_utc,
             )
 
-        # ── Total revenue for period ──────────────────────────────────────
+        # ── Total count + revenue (FIX 1: direct sum, no subquery) ────────
         total_count   = query.count()
-        total_revenue = db.session.query(func.sum(Sale.total_amount))\
-            .filter(Sale.id.in_(query.with_entities(Sale.id)))\
-            .scalar() or 0
+        total_revenue = query.with_entities(
+            func.coalesce(func.sum(Sale.total_amount), 0)
+        ).scalar() or 0
 
-        sales = query.order_by(Sale.sale_date.desc()).all()
+        # ── Fetch sales (FIX 2: eager-load items to kill N+1) ─────────────
+        sales = query.options(joinedload(Sale.items))\
+            .order_by(Sale.sale_date.desc()).all()
 
         return {
             "sales":         [s.to_dict() for s in sales],
@@ -102,7 +106,6 @@ class SaleListResource(Resource):
         if not items_data or not isinstance(items_data, list) or total_amount is None:
             return {"message": "Invalid sale data. Missing items or amounts."}, 400
 
-        # Convert total_amount to float just in case it came as a string
         total_amount = float(total_amount)
 
         # ── Payment Validation ───────────────────────────────────────────
@@ -113,24 +116,21 @@ class SaleListResource(Resource):
             amount_paid    = 0
             change_given   = 0
         else:
-            # ✅ FIXED: If it's a direct M-Pesa, Card, or Split sale where frontend 
-            # passes blank/null cash text input, default amount_paid to total_amount
             if amount_paid is None or amount_paid == "" or float(amount_paid) == 0:
                 if payment_method in ['mpesa', 'card', 'split', 'm-pesa']:
                     amount_paid = total_amount
 
             if amount_paid is None:
                 return {"message": "Amount paid is required."}, 400
-            
-            amount_paid  = float(amount_paid)
-            change_given = amount_paid - total_amount
+
+            amount_paid    = float(amount_paid)
+            change_given   = amount_paid - total_amount
             payment_status = 'paid'
 
             if change_given < 0:
                 return {"message": f"Amount paid (KSh {amount_paid}) is insufficient for total (KSh {total_amount})."}, 400
 
         try:
-            # ── Idempotency check ─────────────────────────────────────────
             existing_sale = Sale.query.filter_by(transaction_id=transaction_id).first()
             if existing_sale:
                 return existing_sale.to_dict(), 200
@@ -157,7 +157,6 @@ class SaleListResource(Resource):
                 if not product:
                     raise ValueError(f"Product {product_id} not found")
 
-                # ── Stock deduction + profit calculation ──────────────────
                 if sale_type == 'wholesale' and product.carton_qty:
                     units_to_deduct = quantity * int(product.carton_qty)
                     total_revenue   = price_from_frontend * quantity
@@ -186,7 +185,6 @@ class SaleListResource(Resource):
                     "sale_type":       sale_type,
                 })
 
-            # ── Create Sale ───────────────────────────────────────────────
             new_sale = Sale(
                 transaction_id = transaction_id,
                 total_amount   = total_amount,
@@ -204,7 +202,6 @@ class SaleListResource(Resource):
             db.session.add(new_sale)
             db.session.flush()
 
-            # ── Create SaleItems + deduct stock ───────────────────────────
             for item in validated_items:
                 product = item["product"]
                 product.stock = float(product.stock) - item["units_to_deduct"]
