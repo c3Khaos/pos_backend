@@ -10,7 +10,6 @@ from extensions import db
 class ProductListResource(Resource):
 
     def get(self):
-        # Single shop — no department filtering needed
         products = Product.query.all()
         return [product.to_dict() for product in products], 200
 
@@ -21,12 +20,13 @@ class ProductListResource(Resource):
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
 
-        name            = request.form.get("name",            "").strip()
-        category        = request.form.get("category",        "").strip()
-        barcode         = request.form.get("barcode",         "").strip()
-        sold_loose      = request.form.get("sold_loose",      "false").lower() == "true"
-        wholesale_price = request.form.get("wholesale_price", "").strip()
-        carton_qty      = request.form.get("carton_qty",      "").strip()
+        name                = request.form.get("name",                "").strip()
+        category            = request.form.get("category",            "").strip()
+        barcode             = request.form.get("barcode",             "").strip()
+        sold_loose          = request.form.get("sold_loose",          "false").lower() == "true"
+        wholesale_price     = request.form.get("wholesale_price",     "").strip()
+        carton_qty          = request.form.get("carton_qty",          "").strip()
+        low_stock_threshold = request.form.get("low_stock_threshold", "").strip()
 
         if not name or not category:
             return {"message": "Name and category are required."}, 400
@@ -42,6 +42,7 @@ class ProductListResource(Resource):
 
         parsed_wholesale = None
         parsed_carton    = None
+        parsed_threshold = None
 
         if wholesale_price:
             try:
@@ -59,21 +60,30 @@ class ProductListResource(Resource):
             except ValueError:
                 return {"message": "Invalid carton quantity."}, 400
 
+        if low_stock_threshold:
+            try:
+                parsed_threshold = int(low_stock_threshold)
+                if parsed_threshold < 0:
+                    return {"message": "Low stock threshold cannot be negative."}, 400
+            except ValueError:
+                return {"message": "Invalid low stock threshold."}, 400
+
         if barcode:
             existing = Product.query.filter_by(barcode=barcode).first()
             if existing:
                 return {"message": f"A product with barcode {barcode} already exists."}, 409
 
         new_product = Product(
-            name            = name,
-            category        = category,
-            price           = price,
-            unit_price      = unit_price,
-            wholesale_price = parsed_wholesale,
-            carton_qty      = parsed_carton,
-            stock           = stock,
-            barcode         = barcode or None,
-            sold_loose      = sold_loose,
+            name                = name,
+            category            = category,
+            price               = price,
+            unit_price          = unit_price,
+            wholesale_price     = parsed_wholesale,
+            carton_qty          = parsed_carton,
+            stock               = stock,
+            barcode             = barcode or None,
+            sold_loose          = sold_loose,
+            low_stock_threshold = parsed_threshold,
         )
         db.session.add(new_product)
         db.session.commit()
@@ -101,7 +111,22 @@ class ProductResource(Resource):
         product.stock           = data.get("stock",           product.stock)
         product.barcode         = data.get("barcode",         product.barcode)
         if "sold_loose" in data:
-            product.sold_loose  = data.get("sold_loose")
+            product.sold_loose = data.get("sold_loose")
+
+        # ── Per-product low stock threshold ───────────────────────────────
+        if "low_stock_threshold" in data:
+            val = data.get("low_stock_threshold")
+            # Empty string / null / 0 → clear it (fall back to global default)
+            if val in (None, "", 0, "0"):
+                product.low_stock_threshold = None
+            else:
+                try:
+                    parsed = int(val)
+                    if parsed < 0:
+                        return {"message": "Low stock threshold cannot be negative."}, 400
+                    product.low_stock_threshold = parsed
+                except (ValueError, TypeError):
+                    return {"message": "Invalid low stock threshold."}, 400
 
         db.session.commit()
         return product.to_dict(), 200
@@ -138,53 +163,50 @@ class ProductCSVUploadResource(Resource):
             return {"message": "File must be a CSV."}, 400
 
         try:
-            # Stream the file lines instead of loading everything raw at once
             stream = io.StringIO(file.stream.read().decode('utf-8'))
             reader = csv.DictReader(stream)
 
-            # --- OPTIMIZATION: Cache existing database entries into memory sets ---
-            # This turns 2 database calls per CSV row into simple, fast RAM lookups.
-            existing_products = db.session.query(Product.name, Product.category, Product.barcode).all()
-            
-            existing_barcodes = {p.barcode for p in existing_products if p.barcode}
-            existing_combos = {(p.name, p.category) for p in existing_products}
-            # ----------------------------------------------------------------------
+            existing_products = db.session.query(
+                Product.name, Product.category, Product.barcode
+            ).all()
 
-            added_count = 0
-            skipped = []
-            errors = []
-            
-            batch_size = 500
+            existing_barcodes = {p.barcode for p in existing_products if p.barcode}
+            existing_combos   = {(p.name, p.category) for p in existing_products}
+
+            added_count   = 0
+            skipped       = []
+            errors        = []
+            batch_size    = 500
             current_batch = []
 
             for i, row in enumerate(reader, start=2):
                 try:
-                    name = row.get('name', '').strip()
-                    category = row.get('category', '').strip()
-                    price = row.get('price', '').strip()
-                    unit_price = row.get('unit_price', '').strip()
-                    stock = row.get('stock', '').strip()
-                    barcode = row.get('barcode', '').strip() or None
+                    name            = row.get('name',            '').strip()
+                    category        = row.get('category',        '').strip()
+                    price           = row.get('price',           '').strip()
+                    unit_price      = row.get('unit_price',      '').strip()
+                    stock           = row.get('stock',           '').strip()
+                    barcode         = row.get('barcode',         '').strip() or None
                     wholesale_price = row.get('wholesale_price', '').strip() or None
-                    carton_qty = row.get('carton_qty', '').strip() or None
+                    carton_qty      = row.get('carton_qty',      '').strip() or None
+                    low_threshold   = row.get('low_stock_threshold', '').strip() or None
 
                     if not name or not category or not price or not unit_price or not stock:
                         errors.append(f"Row {i}: missing required fields — skipped")
-                        current_batch = []  # Clear tracking
                         continue
 
-                    price = float(price)
+                    price      = float(price)
                     unit_price = float(unit_price)
-                    stock = int(stock)
+                    stock      = int(stock)
 
                     if price <= 0 or unit_price <= 0 or stock < 0:
                         errors.append(f"Row {i}: invalid price/stock values — skipped")
                         continue
 
                     parsed_wholesale = float(wholesale_price) if wholesale_price else None
-                    parsed_carton = int(carton_qty) if carton_qty else None
+                    parsed_carton    = int(carton_qty)        if carton_qty      else None
+                    parsed_threshold = int(low_threshold)     if low_threshold   else None
 
-                    # Fast RAM duplicate checking
                     if barcode and barcode in existing_barcodes:
                         skipped.append(f"Row {i}: barcode {barcode} already exists — skipped")
                         continue
@@ -193,30 +215,28 @@ class ProductCSVUploadResource(Resource):
                         skipped.append(f"Row {i}: '{name}' in '{category}' already exists — skipped")
                         continue
 
-                    # Prep object instantiation mapping
                     product = Product(
-                        name=name,
-                        category=category,
-                        price=price,
-                        unit_price=unit_price,
-                        wholesale_price=parsed_wholesale,
-                        carton_qty=parsed_carton,
-                        stock=stock,
-                        barcode=barcode,
-                        sold_loose=False,
+                        name                = name,
+                        category            = category,
+                        price               = price,
+                        unit_price          = unit_price,
+                        wholesale_price     = parsed_wholesale,
+                        carton_qty          = parsed_carton,
+                        stock               = stock,
+                        barcode             = barcode,
+                        sold_loose          = False,
+                        low_stock_threshold = parsed_threshold,
                     )
-                    
+
                     db.session.add(product)
-                    
-                    # Track newly added elements for subsequent duplicate lines within the same CSV
+
                     if barcode:
                         existing_barcodes.add(barcode)
                     existing_combos.add((name, category))
-                    
+
                     added_count += 1
                     current_batch.append(product)
 
-                    # Periodically flush data to DB to keep RAM usage low
                     if len(current_batch) >= batch_size:
                         db.session.commit()
                         current_batch = []
@@ -225,18 +245,17 @@ class ProductCSVUploadResource(Resource):
                     errors.append(f"Row {i}: {str(e)} — skipped")
                     continue
 
-            # Final commit for remaining rows
             if current_batch:
                 db.session.commit()
 
             return {
                 "message": f"Upload complete! {added_count} products added.",
-                "added": added_count,
+                "added":   added_count,
                 "skipped": len(skipped),
-                "errors": len(errors),
+                "errors":  len(errors),
                 "details": {
                     "skipped": skipped[:10],
-                    "errors": errors[:10],
+                    "errors":  errors[:10],
                 }
             }, 201
 

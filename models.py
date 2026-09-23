@@ -121,6 +121,7 @@ class Product(db.Model):
     stock           = db.Column(db.Numeric(10, 2), nullable=False)
     barcode         = db.Column(db.String,         nullable=True, unique=True, index=True)
     sold_loose      = db.Column(db.Boolean,        default=False, nullable=True)
+    low_stock_threshold  = db.Column(db.Integer , nullable=True)
 
     def to_dict(self):
         return {
@@ -134,6 +135,7 @@ class Product(db.Model):
             "stock":           float(self.stock),
             "barcode":         self.barcode,
             "sold_loose":      self.sold_loose,
+            "low_stock_threshold" :self.low_stock_threshold,
         }
 
 
