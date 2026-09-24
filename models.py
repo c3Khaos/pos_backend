@@ -398,3 +398,17 @@ class ShopSettings(db.Model):
             "low_stock_threshold": self.low_stock_threshold,
             "updated_at":          iso_utc(self.updated_at),
         }
+class Category(db.Model):
+    """A managed list of product category names."""
+    __tablename__ = 'categories'
+
+    id         = db.Column(db.Integer,     primary_key=True)
+    name       = db.Column(db.String(80),  unique=True, nullable=False)
+    created_at = db.Column(db.DateTime,    default=utc_now)
+
+    def to_dict(self):
+        return {
+            "id":         self.id,
+            "name":       self.name,
+            "created_at": iso_utc(self.created_at),
+        }

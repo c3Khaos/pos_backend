@@ -35,6 +35,7 @@ from resources.expenses  import ExpenseListResource, ExpenseResource
 from resources.debtors   import DebtorListResource, DebtorDetailResource, DebtorPaymentResource
 from services.report_service import get_daily_report_data, get_recipient_emails
 from services.email_service  import send_daily_report
+from resources.categories import CategoryListResource, CategoryResource
 
 load_dotenv()
 
@@ -116,6 +117,8 @@ with app.app_context():
     api.add_resource(SettingsResource,        "/settings")
     api.add_resource(ChangePasswordResource,  "/settings/change-password")
 
+    api.add_resource(CategoryListResource, "/categories")
+    api.add_resource(CategoryResource,     "/categories/<int:category_id>")
 # ── Health check + cron keepalive ─────────────────────────────────────────────
 @app.route("/")
 def index():

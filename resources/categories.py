@@ -13,8 +13,8 @@ def is_admin(user_id):
 
 class CategoryListResource(Resource):
     """
-    GET  /categories — list all categories (any logged-in user)
-    POST /categories — add a new category (admin only)
+    GET  /categories — list all (any logged-in user)
+    POST /categories — add new (admin only)
     """
 
     @jwt_required()
@@ -34,7 +34,6 @@ class CategoryListResource(Resource):
         if not name:
             return {"message": "Category name is required."}, 400
 
-        # Case-insensitive duplicate check
         existing = Category.query.filter(
             func.lower(Category.name) == name.lower()
         ).first()
@@ -48,7 +47,7 @@ class CategoryListResource(Resource):
 
 
 class CategoryResource(Resource):
-    """DELETE /categories/<id> — remove a category (admin only)"""
+    """DELETE /categories/<id> — remove (admin only, blocked if in use)"""
 
     @jwt_required()
     def delete(self, category_id):
@@ -58,7 +57,6 @@ class CategoryResource(Resource):
 
         category = Category.query.get_or_404(category_id)
 
-        # Block deletion if products still use this category
         in_use = Product.query.filter(
             func.lower(Product.category) == category.name.lower()
         ).count()
