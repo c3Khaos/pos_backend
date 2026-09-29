@@ -29,6 +29,11 @@ from resources.advances import (
     CashAdvanceReturnResource,
     CashAdvanceSummaryResource,
 )
+from resources.onboard import (
+    OnboardResource,
+    SuperAdminResource,
+    SuperAdminTenantResource,
+)
 from resources.settings import SettingsResource, ChangePasswordResource
 from resources.suppliers import SupplierListResource, SupplierResource
 from resources.expenses  import ExpenseListResource, ExpenseResource
@@ -119,6 +124,11 @@ with app.app_context():
 
     api.add_resource(CategoryListResource, "/categories")
     api.add_resource(CategoryResource,     "/categories/<int:category_id>")
+
+        # ── Onboarding + Superadmin (multi-tenancy) ───────────────────────────
+    api.add_resource(OnboardResource,          "/onboard")
+    api.add_resource(SuperAdminResource,       "/superadmin/tenants")
+    api.add_resource(SuperAdminTenantResource, "/superadmin/tenants/<int:tenant_id>")
 # ── Health check + cron keepalive ─────────────────────────────────────────────
 @app.route("/")
 def index():
