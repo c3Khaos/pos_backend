@@ -3,13 +3,20 @@ from flask_restful import Resource
 from models import User, SaleItem, Product, Sale, Expense, CashAdvance, db
 from sqlalchemy import func
 from datetime import datetime, timezone, timedelta
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
+from utils.tenant import get_tenant_id, is_admin
 
 
 class DashboardInfo(Resource):
 
     @jwt_required()
     def get(self):
+        # ── SECURITY: dashboard exposes profit, revenue, cash owed — all
+        # sensitive. Admin-only, and every metric scoped to the tenant.
+        tenant_id = get_tenant_id()
+        if not is_admin():
+            return {"message": "Admin access required."}, 403
+
         try:
             eat_offset  = timedelta(hours=3)
             now_eat     = datetime.now(timezone.utc) + eat_offset
@@ -19,19 +26,22 @@ class DashboardInfo(Resource):
             month_start = datetime(now_eat.year, now_eat.month, 1,
                                    tzinfo=timezone.utc) - eat_offset
 
-            # ── Metrics ────────────────────────────────────────────────────
-            total_users    = db.session.query(User).count()
-            total_products = db.session.query(Product).count()
+            total_users    = db.session.query(User).filter_by(tenant_id=tenant_id).count()
+            total_products = db.session.query(Product).filter_by(tenant_id=tenant_id).count()
 
             total_profit = db.session.query(func.sum(SaleItem.profit))\
+                .filter(SaleItem.tenant_id == tenant_id)\
                 .scalar() or 0
 
             total_sales = db.session.query(func.sum(Sale.total_amount))\
-                .filter(Sale.payment_status == 'paid')\
-                .scalar() or 0
+                .filter(
+                    Sale.tenant_id      == tenant_id,
+                    Sale.payment_status == 'paid',
+                ).scalar() or 0
 
             today_sales = db.session.query(func.sum(Sale.total_amount))\
                 .filter(
+                    Sale.tenant_id      == tenant_id,
                     Sale.sale_date      >= today_start,
                     Sale.sale_date      <  today_end,
                     Sale.payment_status == 'paid',
@@ -40,27 +50,36 @@ class DashboardInfo(Resource):
             today_profit = db.session.query(func.sum(SaleItem.profit))\
                 .join(Sale, Sale.id == SaleItem.sale_id)\
                 .filter(
+                    Sale.tenant_id == tenant_id,
                     Sale.sale_date >= today_start,
                     Sale.sale_date <  today_end,
                 ).scalar() or 0
 
             today_expenses = db.session.query(func.sum(Expense.amount))\
                 .filter(
+                    Expense.tenant_id    == tenant_id,
                     Expense.expense_date >= today_start,
                     Expense.expense_date <  today_end,
                 ).scalar() or 0
 
             month_expenses = db.session.query(func.sum(Expense.amount))\
-                .filter(Expense.expense_date >= month_start)\
-                .scalar() or 0
+                .filter(
+                    Expense.tenant_id    == tenant_id,
+                    Expense.expense_date >= month_start,
+                ).scalar() or 0
 
             total_expenses = db.session.query(func.sum(Expense.amount))\
+                .filter(Expense.tenant_id == tenant_id)\
                 .scalar() or 0
 
-            low_stock = Product.query.filter(Product.stock <= 5).all()
+            low_stock = Product.query.filter(
+                Product.tenant_id == tenant_id,
+                Product.stock <= 5,
+            ).all()
 
             advances = CashAdvance.query.filter(
-                CashAdvance.status.in_(['pending', 'partial'])
+                CashAdvance.tenant_id == tenant_id,
+                CashAdvance.status.in_(['pending', 'partial']),
             ).all()
 
             advances_owed  = sum(

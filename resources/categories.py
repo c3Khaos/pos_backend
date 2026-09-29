@@ -1,46 +1,49 @@
 from flask import request
 from flask_restful import Resource
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import Category, Product, User
+from flask_jwt_extended import jwt_required
+from models import Category, Product
 from extensions import db
 from sqlalchemy import func
-
-
-def is_admin(user_id):
-    user = User.query.get(user_id)
-    return user and user.role == 'admin'
+from utils.tenant import get_tenant_id, is_admin
 
 
 class CategoryListResource(Resource):
     """
-    GET  /categories — list all (any logged-in user)
+    GET  /categories — list this tenant's categories (any logged-in user)
     POST /categories — add new (admin only)
     """
 
     @jwt_required()
     def get(self):
-        categories = Category.query.order_by(Category.name).all()
+        tenant_id = get_tenant_id()
+        if tenant_id is None:
+            return {"message": "Unauthorized."}, 401
+
+        categories = Category.query.filter_by(tenant_id=tenant_id)\
+            .order_by(Category.name).all()
         return [c.to_dict() for c in categories], 200
 
     @jwt_required()
     def post(self):
-        user_id = int(get_jwt_identity())
-        if not is_admin(user_id):
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
-        data = request.get_json()
+        data = request.get_json() or {}
         name = (data.get("name") or "").strip()
 
         if not name:
             return {"message": "Category name is required."}, 400
 
+        # ── Duplicate check scoped to THIS tenant (case-insensitive) ──────
         existing = Category.query.filter(
+            Category.tenant_id == tenant_id,
             func.lower(Category.name) == name.lower()
         ).first()
         if existing:
             return {"message": f"Category '{name}' already exists."}, 409
 
-        category = Category(name=name)
+        category = Category(tenant_id=tenant_id, name=name)
         db.session.add(category)
         db.session.commit()
         return category.to_dict(), 201
@@ -51,13 +54,19 @@ class CategoryResource(Resource):
 
     @jwt_required()
     def delete(self, category_id):
-        user_id = int(get_jwt_identity())
-        if not is_admin(user_id):
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
-        category = Category.query.get_or_404(category_id)
+        # ── SECURITY: scope the lookup to the tenant so an admin of Shop A
+        # can't delete Shop B's category by guessing an id (IDOR).
+        category = Category.query.filter_by(
+            id=category_id, tenant_id=tenant_id
+        ).first_or_404()
 
+        # ── Only count products IN THIS TENANT using the category ─────────
         in_use = Product.query.filter(
+            Product.tenant_id == tenant_id,
             func.lower(Product.category) == category.name.lower()
         ).count()
 

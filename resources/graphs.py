@@ -2,17 +2,23 @@ from flask_restful import Resource
 from flask_jwt_extended import jwt_required
 from models import db, Sale
 from sqlalchemy import func, cast, Date
+from utils.tenant import get_tenant_id
 
 
 class SalesTrend(Resource):
 
     @jwt_required()
     def get(self):
+        tenant_id = get_tenant_id()
+        if tenant_id is None:
+            return {"message": "Unauthorized."}, 401
+
         results = db.session.query(
             cast(Sale.sale_date, Date).label('day'),
             func.sum(Sale.total_amount).label('total_sales'),
         ).filter(
-            Sale.payment_status == 'paid'
+            Sale.tenant_id == tenant_id,
+            Sale.payment_status == 'paid',
         ).group_by(
             cast(Sale.sale_date, Date)
         ).order_by(

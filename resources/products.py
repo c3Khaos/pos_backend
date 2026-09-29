@@ -1,23 +1,31 @@
 import csv
 import io
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from flask import request
 from flask_restful import Resource
-from models import Product, User
+from models import Product
 from extensions import db
+from utils.tenant import get_tenant_id, is_admin
 
 
 class ProductListResource(Resource):
 
+    # ── SECURITY: was public (no @jwt_required) and returned ALL products.
+    # Under multi-tenancy that would leak every shop's catalog to anyone.
+    # Now it requires auth and returns ONLY the caller's tenant's products.
+    @jwt_required()
     def get(self):
-        products = Product.query.all()
+        tenant_id = get_tenant_id()
+        if tenant_id is None:
+            return {"message": "Unauthorized."}, 401
+
+        products = Product.query.filter_by(tenant_id=tenant_id).all()
         return [product.to_dict() for product in products], 200
 
     @jwt_required()
     def post(self):
-        user_id = int(get_jwt_identity())
-        user    = User.query.get(user_id)
-        if not user or user.role != "admin":
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
         name                = request.form.get("name",                "").strip()
@@ -68,12 +76,16 @@ class ProductListResource(Resource):
             except ValueError:
                 return {"message": "Invalid low stock threshold."}, 400
 
+        # ── Barcode uniqueness scoped to THIS tenant ──────────────────────
         if barcode:
-            existing = Product.query.filter_by(barcode=barcode).first()
+            existing = Product.query.filter_by(
+                tenant_id=tenant_id, barcode=barcode
+            ).first()
             if existing:
                 return {"message": f"A product with barcode {barcode} already exists."}, 409
 
         new_product = Product(
+            tenant_id           = tenant_id,
             name                = name,
             category            = category,
             price               = price,
@@ -94,13 +106,16 @@ class ProductResource(Resource):
 
     @jwt_required()
     def patch(self, product_id):
-        user_id = int(get_jwt_identity())
-        user    = User.query.get(user_id)
-        if not user or user.role != "admin":
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
-        product = Product.query.get_or_404(product_id)
-        data    = request.get_json()
+        # ── SECURITY: scope the lookup to the tenant. get_or_404 alone would
+        # let an admin of Shop A edit Shop B's product by guessing an id.
+        product = Product.query.filter_by(
+            id=product_id, tenant_id=tenant_id
+        ).first_or_404()
+        data = request.get_json() or {}
 
         product.name            = data.get("name",            product.name)
         product.category        = data.get("category",        product.category)
@@ -109,14 +124,23 @@ class ProductResource(Resource):
         product.wholesale_price = data.get("wholesale_price", product.wholesale_price)
         product.carton_qty      = data.get("carton_qty",      product.carton_qty)
         product.stock           = data.get("stock",           product.stock)
-        product.barcode         = data.get("barcode",         product.barcode)
+
+        # ── Barcode change must not collide within the tenant ─────────────
+        if "barcode" in data:
+            new_barcode = data.get("barcode") or None
+            if new_barcode and new_barcode != product.barcode:
+                clash = Product.query.filter_by(
+                    tenant_id=tenant_id, barcode=new_barcode
+                ).first()
+                if clash and clash.id != product.id:
+                    return {"message": f"A product with barcode {new_barcode} already exists."}, 409
+            product.barcode = new_barcode
+
         if "sold_loose" in data:
             product.sold_loose = data.get("sold_loose")
 
-        # ── Per-product low stock threshold ───────────────────────────────
         if "low_stock_threshold" in data:
             val = data.get("low_stock_threshold")
-            # Empty string / null / 0 → clear it (fall back to global default)
             if val in (None, "", 0, "0"):
                 product.low_stock_threshold = None
             else:
@@ -133,32 +157,31 @@ class ProductResource(Resource):
 
     @jwt_required()
     def delete(self, product_id):
-        user_id = int(get_jwt_identity())
-        user    = User.query.get(user_id)
-        if not user or user.role != "admin":
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
-        product = Product.query.get_or_404(product_id)
+        product = Product.query.filter_by(
+            id=product_id, tenant_id=tenant_id
+        ).first_or_404()
         db.session.delete(product)
         db.session.commit()
         return {"message": "Product deleted"}, 200
 
 
 class ProductCSVUploadResource(Resource):
-    """POST /products/upload-csv — bulk upload products from CSV"""
+    """POST /products/upload-csv — bulk upload products from CSV (per tenant)"""
 
     @jwt_required()
     def post(self):
-        user_id = int(get_jwt_identity())
-        user = User.query.get(user_id)
-        if not user or user.role != 'admin':
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
         if 'file' not in request.files:
             return {"message": "No file uploaded."}, 400
 
         file = request.files['file']
-
         if not file.filename.endswith('.csv'):
             return {"message": "File must be a CSV."}, 400
 
@@ -166,9 +189,10 @@ class ProductCSVUploadResource(Resource):
             stream = io.StringIO(file.stream.read().decode('utf-8'))
             reader = csv.DictReader(stream)
 
+            # ── Duplicate cache scoped to THIS tenant only ────────────────
             existing_products = db.session.query(
                 Product.name, Product.category, Product.barcode
-            ).all()
+            ).filter_by(tenant_id=tenant_id).all()
 
             existing_barcodes = {p.barcode for p in existing_products if p.barcode}
             existing_combos   = {(p.name, p.category) for p in existing_products}
@@ -216,6 +240,7 @@ class ProductCSVUploadResource(Resource):
                         continue
 
                     product = Product(
+                        tenant_id           = tenant_id,
                         name                = name,
                         category            = category,
                         price               = price,

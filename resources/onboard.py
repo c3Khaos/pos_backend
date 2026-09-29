@@ -1,4 +1,4 @@
-# resources/onboard.py — full updated version
+# resources/onboard.py
 import os
 from flask import request
 from flask_restful import Resource
@@ -8,26 +8,31 @@ from extensions import db
 
 
 def verify_superadmin():
+    """Constant-value compare of the superadmin secret from the header."""
     secret   = os.environ.get("SUPERADMIN_SECRET")
     provided = request.headers.get("X-Superadmin-Secret", "")
-    return secret and provided == secret
+    # Require the secret to actually be configured — never allow an empty
+    # server-side secret to pass an empty provided header.
+    return bool(secret) and provided == secret
 
 
 class OnboardResource(Resource):
+    """POST /onboard — provision a new shop (tenant + admin + settings)."""
     def post(self):
         secret   = os.environ.get("ONBOARD_SECRET")
         provided = request.headers.get("X-Onboard-Secret", "")
+        # If an onboard secret is configured, it MUST match.
         if secret and provided != secret:
             return {"message": "Invalid onboard secret."}, 401
 
-        data = request.get_json()
+        data = request.get_json() or {}
 
         shop_name      = (data.get("shop_name")      or "").strip()
-        admin_username = (data.get("admin_username")  or "").strip()
-        admin_password =  data.get("admin_password",  "")
-        phone          = (data.get("phone")           or "").strip()
-        email          = (data.get("email")           or "").strip() or None
-        plan           = (data.get("plan")            or "starter").strip()
+        admin_username = (data.get("admin_username") or "").strip()
+        admin_password =  data.get("admin_password", "")
+        phone          = (data.get("phone")          or "").strip()
+        email          = (data.get("email")          or "").strip() or None
+        plan           = (data.get("plan")           or "starter").strip()
 
         if not shop_name:
             return {"message": "shop_name is required."}, 400
@@ -39,6 +44,8 @@ class OnboardResource(Resource):
         try:
             base_slug = shop_name.lower().replace(" ", "-")
             slug      = "".join(c for c in base_slug if c.isalnum() or c == "-")[:50]
+            if not slug:
+                slug = "shop"
 
             if Tenant.query.filter_by(slug=slug).first():
                 slug = f"{slug}-{Tenant.query.count() + 1}"
@@ -52,15 +59,7 @@ class OnboardResource(Resource):
                 is_active = True,
             )
             db.session.add(tenant)
-            db.session.flush()
-
-            existing_user = User.query.filter_by(
-                tenant_id=tenant.id,
-                username=admin_username,
-            ).first()
-            if existing_user:
-                db.session.rollback()
-                return {"message": "Username already taken."}, 409
+            db.session.flush()  # get tenant.id
 
             admin = User(
                 tenant_id = tenant.id,
@@ -103,61 +102,40 @@ class OnboardResource(Resource):
 
 
 class SuperAdminResource(Resource):
-    """GET /superadmin/tenants — list all tenants with stats"""
-
+    """GET /superadmin/tenants — list all tenants with stats (secret-gated)."""
     def get(self):
         if not verify_superadmin():
             return {"message": "Unauthorized."}, 401
 
         tenants = Tenant.query.order_by(Tenant.created_at.desc()).all()
         result  = []
-
         for t in tenants:
-            user_count    = User.query.filter_by(tenant_id=t.id).count()
-            sale_count    = Sale.query.filter_by(tenant_id=t.id).count()
-            product_count = Product.query.filter_by(tenant_id=t.id).count()
-            settings      = ShopSettings.query.filter_by(tenant_id=t.id).first()
-
             result.append({
                 **t.to_dict(),
-                "user_count":    user_count,
-                "sale_count":    sale_count,
-                "product_count": product_count,
-                "shop_phone":    settings.shop_phone if settings else None,
+                "user_count":    User.query.filter_by(tenant_id=t.id).count(),
+                "sale_count":    Sale.query.filter_by(tenant_id=t.id).count(),
+                "product_count": Product.query.filter_by(tenant_id=t.id).count(),
             })
 
-        return {
-            "tenants": result,
-            "total":   len(result),
-        }, 200
+        return {"tenants": result, "total": len(result)}, 200
 
 
 class SuperAdminTenantResource(Resource):
-    """
-    GET    /superadmin/tenants/<id>  — single tenant detail
-    PATCH  /superadmin/tenants/<id>  — update plan or active status
-    DELETE /superadmin/tenants/<id>  — deactivate tenant
-    """
+    """GET/PATCH/DELETE /superadmin/tenants/<id> (secret-gated)."""
 
     def get(self, tenant_id):
         if not verify_superadmin():
             return {"message": "Unauthorized."}, 401
 
         tenant = Tenant.query.get_or_404(tenant_id)
-
-        users    = User.query.filter_by(tenant_id=tenant_id).all()
-        sales    = Sale.query.filter_by(tenant_id=tenant_id).count()
-        products = Product.query.filter_by(tenant_id=tenant_id).count()
-        settings = ShopSettings.query.filter_by(tenant_id=tenant_id).first()
-
+        users  = User.query.filter_by(tenant_id=tenant_id).all()
         return {
             "tenant":   tenant.to_dict(),
             "users":    [u.to_dict() for u in users],
             "stats": {
-                "sales":    sales,
-                "products": products,
+                "sales":    Sale.query.filter_by(tenant_id=tenant_id).count(),
+                "products": Product.query.filter_by(tenant_id=tenant_id).count(),
             },
-            "settings": settings.to_dict() if settings else None,
         }, 200
 
     def patch(self, tenant_id):
@@ -165,28 +143,21 @@ class SuperAdminTenantResource(Resource):
             return {"message": "Unauthorized."}, 401
 
         tenant = Tenant.query.get_or_404(tenant_id)
-        data   = request.get_json()
+        data   = request.get_json() or {}
 
         if "plan"      in data: tenant.plan      = data["plan"]
-        if "is_active" in data: tenant.is_active = data["is_active"]
-        if "name"      in data: tenant.name      = data["name"]
+        if "is_active" in data: tenant.is_active = bool(data["is_active"])
+        if "name"      in data: tenant.name      = (data["name"] or "").strip() or tenant.name
 
         db.session.commit()
-        return {
-            "message": "Tenant updated.",
-            "tenant":  tenant.to_dict(),
-        }, 200
+        return {"message": "Tenant updated.", "tenant": tenant.to_dict()}, 200
 
     def delete(self, tenant_id):
         if not verify_superadmin():
             return {"message": "Unauthorized."}, 401
 
+        # Soft delete — deactivate, never destroy shop data
         tenant = Tenant.query.get_or_404(tenant_id)
-
-        # Soft delete — deactivate, don't destroy data
         tenant.is_active = False
         db.session.commit()
-
-        return {
-            "message": f"Tenant '{tenant.name}' deactivated. Data preserved."
-        }, 200
+        return {"message": f"Tenant '{tenant.name}' deactivated. Data preserved."}, 200

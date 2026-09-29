@@ -1,9 +1,10 @@
 from decimal import Decimal
 from flask import request
 from flask_restful import Resource
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import Sale, SaleItem, Product, DebtPayment, User
+from flask_jwt_extended import jwt_required
+from models import Sale, DebtPayment
 from extensions import db
+from utils.tenant import get_tenant_id, current_user_and_tenant, is_admin
 
 
 class DebtorListResource(Resource):
@@ -11,13 +12,12 @@ class DebtorListResource(Resource):
 
     @jwt_required()
     def get(self):
-        user_id = int(get_jwt_identity())
-        user    = db.session.get(User, user_id)
-        if not user or user.role != "admin":
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
         status = request.args.get('status')
-        query  = Sale.query
+        query  = Sale.query.filter_by(tenant_id=tenant_id)
 
         if status and status != 'all':
             query = query.filter(Sale.payment_status == status)
@@ -25,12 +25,14 @@ class DebtorListResource(Resource):
             query = query.filter(Sale.payment_status.in_(['unpaid', 'partial']))
 
         debtors = query.order_by(Sale.sale_date.desc()).all()
-        return [self._enrich(sale) for sale in debtors], 200
+        return [self._enrich(sale, tenant_id) for sale in debtors], 200
 
-    def _enrich(self, sale):
+    def _enrich(self, sale, tenant_id):
         data       = sale.to_dict()
         total_paid = sum(
-            p.amount for p in DebtPayment.query.filter_by(sale_id=sale.id)
+            p.amount for p in DebtPayment.query.filter_by(
+                tenant_id=tenant_id, sale_id=sale.id
+            )
         )
         data['total_paid']  = float(total_paid)
         data['amount_owed'] = float(sale.total_amount - total_paid)
@@ -42,17 +44,18 @@ class DebtorDetailResource(Resource):
 
     @jwt_required()
     def get(self, sale_id):
-        user_id = int(get_jwt_identity())
-        user    = db.session.get(User, user_id)
-        if not user or user.role != "admin":
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
-        sale = db.session.get(Sale, sale_id)
+        # ── SECURITY: scope the sale lookup to tenant (IDOR guard) ────────
+        sale = Sale.query.filter_by(id=sale_id, tenant_id=tenant_id).first()
         if not sale:
             return {"message": "Sale not found."}, 404
 
-        payments = DebtPayment.query.filter_by(sale_id=sale_id)\
-                              .order_by(DebtPayment.paid_at.desc()).all()
+        payments = DebtPayment.query.filter_by(
+            tenant_id=tenant_id, sale_id=sale_id
+        ).order_by(DebtPayment.paid_at.desc()).all()
         total_paid  = sum(p.amount for p in payments)
         amount_owed = sale.total_amount - total_paid
 
@@ -69,16 +72,16 @@ class DebtorPaymentResource(Resource):
 
     @jwt_required()
     def post(self, sale_id):
-        user_id = int(get_jwt_identity())
-        user    = db.session.get(User, user_id)
+        user, tenant_id = current_user_and_tenant()
         if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
 
-        sale = db.session.get(Sale, sale_id)
+        # ── SECURITY: sale must belong to this tenant ─────────────────────
+        sale = Sale.query.filter_by(id=sale_id, tenant_id=tenant_id).first()
         if not sale:
             return {"message": "Sale not found."}, 404
 
-        data   = request.get_json()
+        data   = request.get_json() or {}
         amount = data.get('amount')
         method = data.get('method', 'cash')
 
@@ -97,7 +100,9 @@ class DebtorPaymentResource(Resource):
             return {"message": "This debt is already fully paid."}, 400
 
         total_paid_before = sum(
-            p.amount for p in DebtPayment.query.filter_by(sale_id=sale.id)
+            p.amount for p in DebtPayment.query.filter_by(
+                tenant_id=tenant_id, sale_id=sale.id
+            )
         )
         amount_owed = sale.total_amount - total_paid_before
 
@@ -106,10 +111,11 @@ class DebtorPaymentResource(Resource):
 
         try:
             payment = DebtPayment(
+                tenant_id   = tenant_id,
                 sale_id     = sale.id,
                 amount      = amount,
                 method      = method,
-                received_by = user_id,
+                received_by = user.id,
             )
             db.session.add(payment)
 

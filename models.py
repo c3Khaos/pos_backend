@@ -13,17 +13,58 @@ def utc_now():
     return datetime.now(timezone.utc)
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# TENANT — the shop. Everything else belongs to exactly one tenant.
+# ═════════════════════════════════════════════════════════════════════════════
+class Tenant(db.Model):
+    __tablename__ = 'tenants'
+
+    id         = db.Column(db.Integer,     primary_key=True)
+    name       = db.Column(db.String(100), nullable=False)
+    slug       = db.Column(db.String(60),  unique=True, nullable=False, index=True)
+    phone      = db.Column(db.String(20),  nullable=True)
+    email      = db.Column(db.String(120), nullable=True)
+    plan       = db.Column(db.String(20),  default='starter', nullable=False)
+    is_active  = db.Column(db.Boolean,     default=True, nullable=False)
+    created_at = db.Column(db.DateTime,    default=utc_now)
+
+    def to_dict(self):
+        return {
+            "id":         self.id,
+            "name":       self.name,
+            "slug":       self.slug,
+            "phone":      self.phone,
+            "email":      self.email,
+            "plan":       self.plan,
+            "is_active":  self.is_active,
+            "created_at": iso_utc(self.created_at),
+        }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# USER
+# ═════════════════════════════════════════════════════════════════════════════
 class User(db.Model):
     __tablename__ = "users"
 
     id            = db.Column(db.Integer,     primary_key=True)
-    username      = db.Column(db.String(80),  unique=True, nullable=False)
-    email         = db.Column(db.String(80),  unique=True, nullable=False)
+    tenant_id     = db.Column(db.Integer,     db.ForeignKey('tenants.id'), nullable=False, index=True)
+    username      = db.Column(db.String(80),  nullable=False)
+    email         = db.Column(db.String(80),  nullable=True)
     password_hash = db.Column(db.String(256), nullable=False)
     role          = db.Column(db.String(50),  default='user', nullable=False)
     active        = db.Column(db.Boolean,     default=True,   nullable=False)
 
-    sales = db.relationship("Sale", back_populates="seller")
+    sales  = db.relationship("Sale", back_populates="seller")
+    tenant = db.relationship("Tenant")
+
+    # ── SECURITY: username/email unique PER TENANT, not globally ──────────
+    # Two different shops may both have an "admin" user. Uniqueness is scoped
+    # to the tenant so onboarding a new shop never collides with another shop.
+    __table_args__ = (
+        db.UniqueConstraint('tenant_id', 'username', name='uq_user_tenant_username'),
+        db.UniqueConstraint('tenant_id', 'email',    name='uq_user_tenant_email'),
+    )
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -33,38 +74,47 @@ class User(db.Model):
 
     def to_dict(self):
         return {
-            "id":       self.id,
-            "username": self.username,
-            "email":    self.email,
-            "role":     self.role,
-            "active":   self.active,
+            "id":        self.id,
+            "username":  self.username,
+            "email":     self.email,
+            "role":      self.role,
+            "active":    self.active,
+            "tenant_id": self.tenant_id,
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# SALE
+# ═════════════════════════════════════════════════════════════════════════════
 class Sale(db.Model):
     __tablename__ = "sales"
 
     id             = db.Column(db.Integer,        primary_key=True)
-    transaction_id = db.Column(db.String(100),    unique=True, nullable=True, index=True)
+    tenant_id      = db.Column(db.Integer,        db.ForeignKey('tenants.id'), nullable=False, index=True)
+    transaction_id = db.Column(db.String(100),    nullable=True, index=True)
     total_amount   = db.Column(db.Numeric(10, 2), nullable=False)
     amount_paid    = db.Column(db.Numeric(10, 2), nullable=False)
     change_given   = db.Column(db.Numeric(10, 2), nullable=False)
     payment_method = db.Column(db.String(50),     nullable=False)
-    sale_date      = db.Column(db.DateTime,       nullable=False, default=utc_now)
+    sale_date      = db.Column(db.DateTime,       nullable=False, default=utc_now, index=True)
     user_id        = db.Column(db.Integer,        db.ForeignKey('users.id'))
     customer_name  = db.Column(db.String(100),    nullable=True)
     customer_phone = db.Column(db.String(20),     nullable=True)
     payment_status = db.Column(db.String(20),     default='paid')
 
-    # ── Split payment tracking ────────────────────────────────────────────
-    # For pure cash:  cash_amount = total_amount, mpesa_amount = null
-    # For pure mpesa: cash_amount = null, mpesa_amount = total_amount
-    # For split:      both populated, cash_amount + mpesa_amount = total_amount
     cash_amount    = db.Column(db.Numeric(10, 2), nullable=True)
     mpesa_amount   = db.Column(db.Numeric(10, 2), nullable=True)
 
     seller = db.relationship("User",     back_populates="sales")
     items  = db.relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan")
+
+    # ── SECURITY: transaction_id unique PER TENANT ────────────────────────
+    # The offline idempotency key (transaction_id / UUID) only needs to be
+    # unique within a shop. Scoping it per-tenant prevents a (theoretical)
+    # UUID collision across shops from leaking or blocking another shop's sale.
+    __table_args__ = (
+        db.UniqueConstraint('tenant_id', 'transaction_id', name='uq_sale_tenant_txn'),
+    )
 
     def to_dict(self):
         return {
@@ -85,10 +135,15 @@ class Sale(db.Model):
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# SALE ITEM — inherits tenant via its parent Sale; no direct tenant_id needed,
+# but we add one anyway for defense-in-depth (so a bad join can't leak rows).
+# ═════════════════════════════════════════════════════════════════════════════
 class SaleItem(db.Model):
     __tablename__ = "sale_items"
 
     id         = db.Column(db.Integer,        primary_key=True)
+    tenant_id  = db.Column(db.Integer,        db.ForeignKey('tenants.id'), nullable=False, index=True)
     sale_id    = db.Column(db.Integer,        db.ForeignKey('sales.id'),    nullable=False)
     product_id = db.Column(db.Integer,        db.ForeignKey('products.id'), nullable=False)
     name       = db.Column(db.String(120),    nullable=False)
@@ -108,41 +163,57 @@ class SaleItem(db.Model):
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# PRODUCT
+# ═════════════════════════════════════════════════════════════════════════════
 class Product(db.Model):
     __tablename__ = "products"
 
-    id              = db.Column(db.Integer,        primary_key=True)
-    name            = db.Column(db.String(80),     nullable=False)
-    category        = db.Column(db.String(80),     nullable=False)
-    price           = db.Column(db.Numeric(10, 2), nullable=False)
-    unit_price      = db.Column(db.Numeric(10, 2), nullable=False)
-    wholesale_price = db.Column(db.Numeric(10, 2), nullable=True)
-    carton_qty      = db.Column(db.Integer,        nullable=True)
-    stock           = db.Column(db.Numeric(10, 2), nullable=False)
-    barcode         = db.Column(db.String,         nullable=True, unique=True, index=True)
-    sold_loose      = db.Column(db.Boolean,        default=False, nullable=True)
-    low_stock_threshold  = db.Column(db.Integer , nullable=True)
+    id                  = db.Column(db.Integer,        primary_key=True)
+    tenant_id           = db.Column(db.Integer,        db.ForeignKey('tenants.id'), nullable=False, index=True)
+    name                = db.Column(db.String(80),     nullable=False)
+    category            = db.Column(db.String(80),     nullable=False)
+    price               = db.Column(db.Numeric(10, 2), nullable=False)
+    unit_price          = db.Column(db.Numeric(10, 2), nullable=False)
+    wholesale_price     = db.Column(db.Numeric(10, 2), nullable=True)
+    carton_qty          = db.Column(db.Integer,        nullable=True)
+    stock               = db.Column(db.Numeric(10, 2), nullable=False)
+    barcode             = db.Column(db.String,         nullable=True, index=True)
+    sold_loose          = db.Column(db.Boolean,        default=False, nullable=True)
+    low_stock_threshold = db.Column(db.Integer,        nullable=True)
+
+    # ── SECURITY: barcode unique PER TENANT, not globally ─────────────────
+    # Two shops may legitimately stock the same product with the same barcode.
+    # Global uniqueness would let one shop's barcode block another's, or worse,
+    # a barcode lookup could surface across shops. Scope it per-tenant.
+    __table_args__ = (
+        db.UniqueConstraint('tenant_id', 'barcode', name='uq_product_tenant_barcode'),
+    )
 
     def to_dict(self):
         return {
-            "id":              self.id,
-            "name":            self.name,
-            "category":        self.category,
-            "price":           float(self.price),
-            "unit_price":      float(self.unit_price),
-            "wholesale_price": float(self.wholesale_price) if self.wholesale_price else None,
-            "carton_qty":      self.carton_qty,
-            "stock":           float(self.stock),
-            "barcode":         self.barcode,
-            "sold_loose":      self.sold_loose,
-            "low_stock_threshold" :self.low_stock_threshold,
+            "id":                  self.id,
+            "name":                self.name,
+            "category":            self.category,
+            "price":               float(self.price),
+            "unit_price":          float(self.unit_price),
+            "wholesale_price":     float(self.wholesale_price) if self.wholesale_price else None,
+            "carton_qty":          self.carton_qty,
+            "stock":               float(self.stock),
+            "barcode":             self.barcode,
+            "sold_loose":          self.sold_loose,
+            "low_stock_threshold": self.low_stock_threshold,
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# SUPPLIER
+# ═════════════════════════════════════════════════════════════════════════════
 class Supplier(db.Model):
     __tablename__ = 'suppliers'
 
     id         = db.Column(db.Integer,     primary_key=True)
+    tenant_id  = db.Column(db.Integer,     db.ForeignKey('tenants.id'), nullable=False, index=True)
     name       = db.Column(db.String(100), nullable=False)
     phone      = db.Column(db.String(20),  nullable=False)
     email      = db.Column(db.String(120), nullable=True)
@@ -160,10 +231,14 @@ class Supplier(db.Model):
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# EXPENSE
+# ═════════════════════════════════════════════════════════════════════════════
 class Expense(db.Model):
     __tablename__ = 'expenses'
 
     id           = db.Column(db.Integer,        primary_key=True)
+    tenant_id    = db.Column(db.Integer,        db.ForeignKey('tenants.id'), nullable=False, index=True)
     description  = db.Column(db.String(200),    nullable=False)
     amount       = db.Column(db.Numeric(10, 2), nullable=False)
     category     = db.Column(db.String(80),     nullable=False)
@@ -185,10 +260,14 @@ class Expense(db.Model):
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# MPESA TRANSACTION
+# ═════════════════════════════════════════════════════════════════════════════
 class MpesaTransaction(db.Model):
     __tablename__ = 'mpesa_transactions'
 
     id                    = db.Column(db.Integer,        primary_key=True)
+    tenant_id             = db.Column(db.Integer,        db.ForeignKey('tenants.id'), nullable=True, index=True)
     merchant_request_id   = db.Column(db.String(100),    nullable=True)
     checkout_request_id   = db.Column(db.String(100),    nullable=True, index=True)
     result_code           = db.Column(db.Integer,        nullable=True)
@@ -233,10 +312,14 @@ class MpesaTransaction(db.Model):
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# DEBT PAYMENT
+# ═════════════════════════════════════════════════════════════════════════════
 class DebtPayment(db.Model):
     __tablename__ = 'debt_payments'
 
     id          = db.Column(db.Integer,        primary_key=True)
+    tenant_id   = db.Column(db.Integer,        db.ForeignKey('tenants.id'), nullable=False, index=True)
     sale_id     = db.Column(db.Integer,        db.ForeignKey('sales.id'), nullable=False)
     amount      = db.Column(db.Numeric(10, 2), nullable=False)
     method      = db.Column(db.String(20))
@@ -254,10 +337,14 @@ class DebtPayment(db.Model):
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# CASH ADVANCE
+# ═════════════════════════════════════════════════════════════════════════════
 class CashAdvance(db.Model):
     __tablename__ = 'cash_advances'
 
     id              = db.Column(db.Integer,        primary_key=True)
+    tenant_id       = db.Column(db.Integer,        db.ForeignKey('tenants.id'), nullable=False, index=True)
     person_name     = db.Column(db.String(100),    nullable=False)
     amount          = db.Column(db.Numeric(10, 2), nullable=False)
     reason          = db.Column(db.String(255),    nullable=True)
@@ -286,11 +373,15 @@ class CashAdvance(db.Model):
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# STOCK RETURN
+# ═════════════════════════════════════════════════════════════════════════════
 class StockReturn(db.Model):
     """Customer returns a product — stock goes back up, refund issued."""
     __tablename__ = 'stock_returns'
 
     id            = db.Column(db.Integer,        primary_key=True)
+    tenant_id     = db.Column(db.Integer,        db.ForeignKey('tenants.id'), nullable=False, index=True)
     sale_id       = db.Column(db.Integer,        db.ForeignKey('sales.id'), nullable=True)
     product_id    = db.Column(db.Integer,        db.ForeignKey('products.id'), nullable=False)
     product_name  = db.Column(db.String(120),    nullable=False)
@@ -316,11 +407,15 @@ class StockReturn(db.Model):
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# RESTOCK
+# ═════════════════════════════════════════════════════════════════════════════
 class Restock(db.Model):
     """New stock arriving from supplier — stock goes up."""
     __tablename__ = 'restocks'
 
     id            = db.Column(db.Integer,        primary_key=True)
+    tenant_id     = db.Column(db.Integer,        db.ForeignKey('tenants.id'), nullable=False, index=True)
     product_id    = db.Column(db.Integer,        db.ForeignKey('products.id'), nullable=False)
     product_name  = db.Column(db.String(120),    nullable=False)
     quantity      = db.Column(db.Integer,        nullable=False)
@@ -350,18 +445,29 @@ class Restock(db.Model):
         }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# CASH RECONCILIATION
+# ═════════════════════════════════════════════════════════════════════════════
 class CashReconciliation(db.Model):
     """End of day cash count vs expected."""
     __tablename__ = 'cash_reconciliations'
 
     id              = db.Column(db.Integer,        primary_key=True)
-    reconciled_date = db.Column(db.Date,           nullable=False, unique=True)
+    tenant_id       = db.Column(db.Integer,        db.ForeignKey('tenants.id'), nullable=False, index=True)
+    reconciled_date = db.Column(db.Date,           nullable=False)
     expected_cash   = db.Column(db.Numeric(10, 2), nullable=False)
     actual_cash     = db.Column(db.Numeric(10, 2), nullable=False)
     difference      = db.Column(db.Numeric(10, 2), nullable=False)
     notes           = db.Column(db.String(500),    nullable=True)
     reconciled_at   = db.Column(db.DateTime,       default=utc_now)
     reconciled_by   = db.Column(db.Integer,        db.ForeignKey('users.id'), nullable=True)
+
+    # ── SECURITY: one reconciliation per DAY per TENANT ───────────────────
+    # Was globally unique on date — which would let one shop's reconciliation
+    # block every other shop from reconciling the same day. Scope per-tenant.
+    __table_args__ = (
+        db.UniqueConstraint('tenant_id', 'reconciled_date', name='uq_recon_tenant_date'),
+    )
 
     def to_dict(self):
         return {
@@ -374,11 +480,16 @@ class CashReconciliation(db.Model):
             "reconciled_at":   iso_utc(self.reconciled_at),
             "reconciled_by":   self.reconciled_by,
         }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SHOP SETTINGS — one row PER TENANT (no longer a global singleton)
+# ═════════════════════════════════════════════════════════════════════════════
 class ShopSettings(db.Model):
-    """One row per shop — singleton table."""
     __tablename__ = 'shop_settings'
 
     id                  = db.Column(db.Integer,     primary_key=True)
+    tenant_id           = db.Column(db.Integer,     db.ForeignKey('tenants.id'), nullable=False, unique=True, index=True)
     shop_name           = db.Column(db.String(100), nullable=False, default="My Shop")
     shop_tagline        = db.Column(db.String(200), nullable=True)
     shop_phone          = db.Column(db.String(20),  nullable=True)
@@ -398,13 +509,24 @@ class ShopSettings(db.Model):
             "low_stock_threshold": self.low_stock_threshold,
             "updated_at":          iso_utc(self.updated_at),
         }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CATEGORY
+# ═════════════════════════════════════════════════════════════════════════════
 class Category(db.Model):
-    """A managed list of product category names."""
+    """A managed list of product category names — per tenant."""
     __tablename__ = 'categories'
 
     id         = db.Column(db.Integer,     primary_key=True)
-    name       = db.Column(db.String(80),  unique=True, nullable=False)
+    tenant_id  = db.Column(db.Integer,     db.ForeignKey('tenants.id'), nullable=False, index=True)
+    name       = db.Column(db.String(80),  nullable=False)
     created_at = db.Column(db.DateTime,    default=utc_now)
+
+    # ── SECURITY: category name unique PER TENANT ─────────────────────────
+    __table_args__ = (
+        db.UniqueConstraint('tenant_id', 'name', name='uq_category_tenant_name'),
+    )
 
     def to_dict(self):
         return {

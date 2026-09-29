@@ -1,26 +1,23 @@
 from decimal import Decimal
 from flask import request
 from flask_restful import Resource
-from models import Expense, User
+from models import Expense
 from extensions import db
 from datetime import datetime, timezone
-from flask_jwt_extended import jwt_required, get_jwt_identity
-
-
-def admin_required():
-    user_id = int(get_jwt_identity())
-    user    = db.session.get(User, user_id)
-    return user and user.role == 'admin'
+from flask_jwt_extended import jwt_required
+from utils.tenant import get_tenant_id, current_user_and_tenant, is_admin
 
 
 class ExpenseListResource(Resource):
+
     @jwt_required()
     def get(self):
-        if not admin_required():
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
         department = request.args.get('department')
-        query = Expense.query
+        query = Expense.query.filter_by(tenant_id=tenant_id)
         if department:
             query = query.filter(Expense.department == department)
         expenses = query.order_by(Expense.expense_date.desc()).all()
@@ -28,12 +25,11 @@ class ExpenseListResource(Resource):
 
     @jwt_required()
     def post(self):
-        if not admin_required():
+        user, tenant_id = current_user_and_tenant()
+        if not user or not user.role == 'admin':
             return {"message": "Admin access required."}, 403
 
-        user_id = int(get_jwt_identity())
-        data    = request.get_json()
-
+        data             = request.get_json() or {}
         description      = data.get("description", "").strip()
         amount           = data.get("amount")
         category         = data.get("category", "").strip()
@@ -51,9 +47,6 @@ class ExpenseListResource(Resource):
         if amount <= 0:
             return {"message": "Amount must be greater than zero."}, 400
 
-        if department not in ('shop', 'hardware'):
-            return {"message": "Department must be 'shop' or 'hardware'."}, 400
-
         expense_date = (
             datetime.fromisoformat(expense_date_str.replace("Z", "+00:00"))
             if expense_date_str
@@ -61,12 +54,13 @@ class ExpenseListResource(Resource):
         )
 
         expense = Expense(
+            tenant_id    = tenant_id,
             description  = description,
             amount       = amount,
             category     = category,
             department   = department,
             expense_date = expense_date,
-            recorded_by  = user_id
+            recorded_by  = user.id,
         )
         db.session.add(expense)
         db.session.commit()
@@ -74,12 +68,17 @@ class ExpenseListResource(Resource):
 
 
 class ExpenseResource(Resource):
+
     @jwt_required()
     def delete(self, expense_id):
-        if not admin_required():
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
-        expense = db.session.get(Expense, expense_id)
+        # ── SECURITY: scope lookup to tenant (IDOR guard) ─────────────────
+        expense = Expense.query.filter_by(
+            id=expense_id, tenant_id=tenant_id
+        ).first()
         if not expense:
             return {"message": "Expense not found."}, 404
         db.session.delete(expense)

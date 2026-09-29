@@ -4,24 +4,22 @@ Sends the daily business report via Resend (HTTPS API).
 
 Required env vars:
     RESEND_API_KEY   - Resend API key (starts with re_...)
-    MAIL_FROM_EMAIL  - sender address. Use 'onboarding@resend.dev' until you verify a domain
-    MAIL_FROM_NAME   - display name shown to recipients (e.g. "StockEdge Daily Report")
+    MAIL_FROM_EMAIL  - sender address (use 'onboarding@resend.dev' until domain verified)
+    MAIL_FROM_NAME   - display name shown to recipients
 """
 
 import os
 import logging
 import resend
-from models import User
+from services.report_service import get_recipient_emails
 
 logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HTML Template
+# HTML Template  (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 def _build_html(data: dict) -> str:
-    """Build the HTML email body from the compiled report data."""
-
     summary      = data["summary"]
     top_products = data["top_products"]
     low_stock    = data["low_stock"]
@@ -186,34 +184,36 @@ def _build_html(data: dict) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
-def send_daily_report(data: dict) -> dict:
+def send_daily_report(data: dict, recipients: list = None, tenant_id: int = None) -> dict:
     """
-    Send the daily report via Resend HTTPS API.
-    Sends one email per recipient with proper error tracking.
+    Send the daily report via Resend.
+
+    SECURITY: recipients must belong to the SAME tenant as the data.
+      - If `recipients` is passed explicitly (from the authed /admin/send-report
+        endpoint), those are used as-is (already tenant-scoped by the caller).
+      - Otherwise we resolve them from the tenant_id — either the one passed in
+        or the one embedded in `data`. We NEVER fall back to "all admins".
     """
     api_key    = os.environ.get("RESEND_API_KEY")
     from_email = os.environ.get("MAIL_FROM_EMAIL", "onboarding@resend.dev")
     from_name  = os.environ.get("MAIL_FROM_NAME",  "POS Daily Report")
-    users = (
-    User.query
-    .filter(User.role == "admin",
-            User.active == True)
-    .with_entities(User.email)
-    .all()
-)
-    recipients = [
-    user.email
-    for user in users
-    if user.email
-]
+
+    # Resolve the tenant we're reporting for
+    effective_tenant = tenant_id if tenant_id is not None else data.get("tenant_id")
+
+    if recipients is None:
+        if effective_tenant is None:
+            logger.error("send_daily_report: no recipients and no tenant_id — refusing to send.")
+            return {"recipients": 0, "sent": 0, "failed": 0}
+        recipients = get_recipient_emails(effective_tenant)
 
     if not api_key:
         logger.error("Missing RESEND_API_KEY — report not sent.")
-        return {"sent": 0, "failed": len(recipients)}
+        return {"recipients": len(recipients), "sent": 0, "failed": len(recipients)}
 
     if not recipients:
-        logger.warning("No recipients provided.")
-        return {"sent": 0, "failed": 0}
+        logger.warning(f"No recipients for tenant {effective_tenant}.")
+        return {"recipients": 0, "sent": 0, "failed": 0}
 
     resend.api_key = api_key
 
@@ -238,5 +238,5 @@ def send_daily_report(data: dict) -> dict:
             logger.error(f"Failed to send to {email}: {e}")
             failed += 1
 
-    logger.info(f"Report job complete — {sent} sent, {failed} failed")
-    return {"sent": sent, "failed": failed}
+    logger.info(f"Report job complete (tenant={effective_tenant}) — {sent} sent, {failed} failed")
+    return {"recipients": len(recipients), "sent": sent, "failed": failed}

@@ -1,31 +1,19 @@
 from flask import request
 from flask_restful import Resource
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import CashReconciliation, Sale, User
+from flask_jwt_extended import jwt_required
+from models import CashReconciliation, Sale
 from extensions import db
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import func, cast, Date
+from utils.tenant import get_tenant_id, current_user_and_tenant, is_admin
 
 
-def is_admin(user_id):
-    user = User.query.get(user_id)
-    return user and user.role == 'admin'
+def _calculate_expected_for_date(target_date, tenant_id):
+    """Expected cash-drawer and till totals for a date — scoped to tenant."""
 
-
-def _calculate_expected_for_date(target_date):
-    """
-    CASH DRAWER (physical notes in till):
-      - Pure cash sales       → total_amount
-      - Split sales           → cash_amount only
-
-    TILL / M-PESA (Kopo Kopo balance):
-      - Pure mpesa sales      → total_amount
-      - Split sales           → mpesa_amount only
-    """
-
-    # ── Cash drawer ───────────────────────────────────────────────────────
     cash_sales = db.session.query(func.sum(Sale.total_amount))\
         .filter(
+            Sale.tenant_id == tenant_id,
             cast(Sale.sale_date, Date) == target_date,
             Sale.payment_method == 'cash',
             Sale.payment_status == 'paid',
@@ -33,6 +21,7 @@ def _calculate_expected_for_date(target_date):
 
     split_cash = db.session.query(func.sum(Sale.cash_amount))\
         .filter(
+            Sale.tenant_id == tenant_id,
             cast(Sale.sale_date, Date) == target_date,
             Sale.payment_method == 'split',
             Sale.payment_status == 'paid',
@@ -41,9 +30,9 @@ def _calculate_expected_for_date(target_date):
 
     expected_cash = float(cash_sales) + float(split_cash)
 
-    # ── Till / M-Pesa ─────────────────────────────────────────────────────
     mpesa_sales = db.session.query(func.sum(Sale.total_amount))\
         .filter(
+            Sale.tenant_id == tenant_id,
             cast(Sale.sale_date, Date) == target_date,
             Sale.payment_method == 'mpesa',
             Sale.payment_status == 'paid',
@@ -51,6 +40,7 @@ def _calculate_expected_for_date(target_date):
 
     split_mpesa = db.session.query(func.sum(Sale.mpesa_amount))\
         .filter(
+            Sale.tenant_id == tenant_id,
             cast(Sale.sale_date, Date) == target_date,
             Sale.payment_method == 'split',
             Sale.payment_status == 'paid',
@@ -59,38 +49,34 @@ def _calculate_expected_for_date(target_date):
 
     expected_till = float(mpesa_sales) + float(split_mpesa)
 
-    # ── Total revenue all methods ─────────────────────────────────────────
     total_sales = db.session.query(func.sum(Sale.total_amount))\
         .filter(
+            Sale.tenant_id == tenant_id,
             cast(Sale.sale_date, Date) == target_date,
             Sale.payment_status == 'paid',
         ).scalar() or 0
 
-    # ── Credit sales (not yet collected) ─────────────────────────────────
     credit_sales = db.session.query(func.sum(Sale.total_amount))\
         .filter(
+            Sale.tenant_id == tenant_id,
             cast(Sale.sale_date, Date) == target_date,
             Sale.payment_method == 'credit',
         ).scalar() or 0
 
     return {
-        "expected_cash":  expected_cash,
-        "expected_till":  expected_till,
-        "total_sales":    float(total_sales),
-        "credit_sales":   float(credit_sales),
+        "expected_cash": expected_cash,
+        "expected_till": expected_till,
+        "total_sales":   float(total_sales),
+        "credit_sales":  float(credit_sales),
     }
 
 
 class ReconciliationResource(Resource):
-    """
-    GET  /reconciliation  — fetch expected amounts + 30-day history
-    POST /reconciliation  — lock actual cash count for the day
-    """
 
     @jwt_required()
     def get(self):
-        user_id = int(get_jwt_identity())
-        if not is_admin(user_id):
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
         target_date_str = request.args.get('date')
@@ -103,13 +89,14 @@ class ReconciliationResource(Resource):
             eat_offset  = timedelta(hours=3)
             target_date = (datetime.now(timezone.utc) + eat_offset).date()
 
-        expected = _calculate_expected_for_date(target_date)
+        expected = _calculate_expected_for_date(target_date, tenant_id)
 
         existing = CashReconciliation.query.filter_by(
-            reconciled_date=target_date
+            tenant_id=tenant_id, reconciled_date=target_date
         ).first()
 
         past = CashReconciliation.query\
+            .filter_by(tenant_id=tenant_id)\
             .order_by(CashReconciliation.reconciled_date.desc())\
             .limit(30).all()
 
@@ -125,12 +112,11 @@ class ReconciliationResource(Resource):
 
     @jwt_required()
     def post(self):
-        user_id = int(get_jwt_identity())
-        if not is_admin(user_id):
+        user, tenant_id = current_user_and_tenant()
+        if not user or user.role != "admin":
             return {"message": "Admin access required."}, 403
 
-        data = request.get_json()
-
+        data            = request.get_json() or {}
         actual_cash     = data.get('actual_cash')
         actual_till     = data.get('actual_till', 0)
         notes           = data.get('notes', '').strip()
@@ -157,7 +143,7 @@ class ReconciliationResource(Resource):
             target_date = (datetime.now(timezone.utc) + eat_offset).date()
 
         existing = CashReconciliation.query.filter_by(
-            reconciled_date=target_date
+            tenant_id=tenant_id, reconciled_date=target_date
         ).first()
         if existing:
             return {
@@ -165,13 +151,10 @@ class ReconciliationResource(Resource):
                 "existing": existing.to_dict(),
             }, 409
 
-        expected = _calculate_expected_for_date(target_date)
-
+        expected        = _calculate_expected_for_date(target_date, tenant_id)
         cash_difference = actual_cash - expected["expected_cash"]
         till_difference = actual_till - expected["expected_till"]
 
-        # ── Pack till figures into notes since we have no extra columns ───
-        # Format: "TILL:expected=X,actual=Y,diff=Z | <admin notes>"
         till_summary = (
             f"TILL: expected={expected['expected_till']:.2f}, "
             f"actual={actual_till:.2f}, "
@@ -181,24 +164,24 @@ class ReconciliationResource(Resource):
 
         try:
             recon = CashReconciliation(
+                tenant_id       = tenant_id,
                 reconciled_date = target_date,
                 expected_cash   = expected["expected_cash"],
                 actual_cash     = actual_cash,
                 difference      = cash_difference,
                 notes           = full_notes,
-                reconciled_by   = user_id,
+                reconciled_by   = user.id,
             )
             db.session.add(recon)
             db.session.commit()
 
-            # Return everything the frontend needs
             return {
                 **recon.to_dict(),
-                "expected_till":  expected["expected_till"],
-                "actual_till":    actual_till,
+                "expected_till":   expected["expected_till"],
+                "actual_till":     actual_till,
                 "till_difference": till_difference,
-                "total_sales":    expected["total_sales"],
-                "credit_sales":   expected["credit_sales"],
+                "total_sales":     expected["total_sales"],
+                "credit_sales":    expected["credit_sales"],
             }, 201
 
         except Exception as e:

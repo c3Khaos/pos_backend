@@ -1,32 +1,26 @@
 from decimal import Decimal
 from flask import request
 from flask_restful import Resource
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import CashAdvance, User
+from flask_jwt_extended import jwt_required
+from models import CashAdvance
 from extensions import db
 from datetime import datetime, timezone
-
-
-def is_admin(user_id):
-    user = db.session.get(User, user_id)
-    return user and user.role == 'admin'
+from utils.tenant import get_tenant_id, current_user_and_tenant, is_admin
 
 
 class CashAdvanceListResource(Resource):
-    """GET /advances   — list all advances
-       POST /advances  — record new advance"""
 
     @jwt_required()
     def get(self):
-        user_id = int(get_jwt_identity())
-        if not is_admin(user_id):
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
         department = request.args.get('department')
         status     = request.args.get('status')
         show_all   = request.args.get('all') == 'true'
 
-        query = CashAdvance.query
+        query = CashAdvance.query.filter_by(tenant_id=tenant_id)
 
         if department:
             query = query.filter(CashAdvance.department == department)
@@ -37,7 +31,6 @@ class CashAdvanceListResource(Resource):
         elif status:
             query = query.filter(CashAdvance.status == status)
         else:
-            # Default: outstanding only
             query = query.filter(CashAdvance.status.in_(['pending', 'partial']))
 
         advances = query.order_by(CashAdvance.taken_at.desc()).all()
@@ -45,12 +38,11 @@ class CashAdvanceListResource(Resource):
 
     @jwt_required()
     def post(self):
-        user_id = int(get_jwt_identity())
-        if not is_admin(user_id):
+        user, tenant_id = current_user_and_tenant()
+        if not user or user.role != 'admin':
             return {"message": "Admin access required."}, 403
 
-        data = request.get_json()
-
+        data        = request.get_json() or {}
         person_name = data.get('person_name', '').strip()
         amount      = data.get('amount')
         reason      = data.get('reason', '').strip()
@@ -58,7 +50,6 @@ class CashAdvanceListResource(Resource):
 
         if not person_name:
             return {"message": "Person name is required."}, 400
-
         if amount is None:
             return {"message": "Amount is required."}, 400
 
@@ -70,15 +61,13 @@ class CashAdvanceListResource(Resource):
         if amount <= 0:
             return {"message": "Amount must be greater than 0."}, 400
 
-        if department not in ('shop', 'hardware'):
-            return {"message": "Department must be 'shop' or 'hardware'."}, 400
-
         advance = CashAdvance(
+            tenant_id   = tenant_id,
             person_name = person_name,
             amount      = amount,
             reason      = reason or None,
             department  = department,
-            recorded_by = user_id,
+            recorded_by = user.id,
         )
         db.session.add(advance)
         db.session.commit()
@@ -86,18 +75,20 @@ class CashAdvanceListResource(Resource):
 
 
 class CashAdvanceReturnResource(Resource):
-    """POST /advances/<id>/return — record a return payment"""
 
     @jwt_required()
     def post(self, advance_id):
-        user_id = int(get_jwt_identity())
-        if not is_admin(user_id):
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
-        advance = db.session.get(CashAdvance, advance_id)
+        advance = CashAdvance.query.filter_by(
+            id=advance_id, tenant_id=tenant_id
+        ).first()
         if not advance:
             return {"message": "Advance not found."}, 404
-        data = request.get_json()
+
+        data = request.get_json() or {}
 
         if advance.status == 'returned':
             return {"message": "This advance has already been fully returned."}, 400
@@ -147,26 +138,23 @@ class CashAdvanceReturnResource(Resource):
 
 
 class CashAdvanceSummaryResource(Resource):
-    """GET /advances/summary — totals for dashboard"""
 
     @jwt_required()
     def get(self):
-        user_id = int(get_jwt_identity())
-        if not is_admin(user_id):
+        tenant_id = get_tenant_id()
+        if not is_admin():
             return {"message": "Admin access required."}, 403
 
         department = request.args.get('department')
 
-        # ── Outstanding (pending + partial) ──────────────────────────────
-        outstanding_q = CashAdvance.query.filter(
+        outstanding_q = CashAdvance.query.filter_by(tenant_id=tenant_id).filter(
             CashAdvance.status.in_(['pending', 'partial'])
         )
         if department:
             outstanding_q = outstanding_q.filter(CashAdvance.department == department)
         outstanding = outstanding_q.all()
 
-        # ── All-time advances for this department ────────────────────────
-        all_q = CashAdvance.query
+        all_q = CashAdvance.query.filter_by(tenant_id=tenant_id)
         if department:
             all_q = all_q.filter(CashAdvance.department == department)
         all_advances = all_q.all()

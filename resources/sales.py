@@ -1,30 +1,30 @@
 from flask import request
 from flask_restful import Resource
-from models import Sale, SaleItem, Product, User
+from models import Sale, SaleItem, Product
 from extensions import db
 from datetime import datetime, timezone, timedelta
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload          # 👈 NEW — for eager loading
+from sqlalchemy.orm import joinedload
 from decimal import Decimal
 from sqlalchemy import func
+from utils.tenant import get_tenant_id, current_user_and_tenant
 
 
 class SaleListResource(Resource):
 
     @jwt_required()
     def get(self):
-        current_user_id = int(get_jwt_identity())
-        user            = User.query.get(current_user_id)
+        user, tenant_id = current_user_and_tenant()
+        if not user or tenant_id is None:
+            return {"message": "Unauthorized."}, 401
 
-        # ── Date filtering params ─────────────────────────────────────────
         period   = request.args.get('period', 'day')
         date_str = request.args.get('date')
 
         eat_offset = timedelta(hours=3)
         now_eat    = datetime.now(timezone.utc) + eat_offset
 
-        # ── Determine date range ──────────────────────────────────────────
         if period == 'all':
             start_utc = None
             end_utc   = None
@@ -54,11 +54,12 @@ class SaleListResource(Resource):
             start_utc = local_start - eat_offset
             end_utc   = local_end   - eat_offset
 
-        # ── Build query ───────────────────────────────────────────────────
-        if user and user.role == "admin":
-            query = Sale.query
-        else:
-            query = Sale.query.filter_by(user_id=current_user_id)
+        # ── Build query — ALWAYS scoped to tenant first ───────────────────
+        query = Sale.query.filter_by(tenant_id=tenant_id)
+
+        # Cashiers see only their own sales; admins see the whole shop's
+        if user.role != "admin":
+            query = query.filter_by(user_id=user.id)
 
         if start_utc and end_utc:
             query = query.filter(
@@ -66,13 +67,11 @@ class SaleListResource(Resource):
                 Sale.sale_date <= end_utc,
             )
 
-        # ── Total count + revenue (FIX 1: direct sum, no subquery) ────────
         total_count   = query.count()
         total_revenue = query.with_entities(
             func.coalesce(func.sum(Sale.total_amount), 0)
         ).scalar() or 0
 
-        # ── Fetch sales (FIX 2: eager-load items to kill N+1) ─────────────
         sales = query.options(joinedload(Sale.items))\
             .order_by(Sale.sale_date.desc()).all()
 
@@ -84,11 +83,11 @@ class SaleListResource(Resource):
 
     @jwt_required()
     def post(self):
-        user_id = int(get_jwt_identity())
-        if not user_id:
+        user, tenant_id = current_user_and_tenant()
+        if not user or tenant_id is None:
             return {"error": "Unauthorized. Please log in."}, 401
 
-        data           = request.get_json()
+        data           = request.get_json() or {}
         transaction_id = data.get('transaction_id')
         items_data     = data.get('items')
         total_amount   = data.get('total_amount')
@@ -131,7 +130,10 @@ class SaleListResource(Resource):
                 return {"message": f"Amount paid (KSh {amount_paid}) is insufficient for total (KSh {total_amount})."}, 400
 
         try:
-            existing_sale = Sale.query.filter_by(transaction_id=transaction_id).first()
+            # ── Idempotency scoped to tenant ──────────────────────────────
+            existing_sale = Sale.query.filter_by(
+                tenant_id=tenant_id, transaction_id=transaction_id
+            ).first()
             if existing_sale:
                 return existing_sale.to_dict(), 200
 
@@ -153,7 +155,13 @@ class SaleListResource(Resource):
                 if not product_id or not product_name or not quantity or price_from_frontend is None:
                     raise ValueError("Invalid item data within sale.")
 
-                product = Product.query.get(product_id)
+                # ── SECURITY: product MUST belong to this tenant ──────────
+                # Without the tenant filter, a client could pass another
+                # shop's product_id and deduct THEIR stock / leak their
+                # product. Scoping the lookup blocks cross-tenant tampering.
+                product = Product.query.filter_by(
+                    id=product_id, tenant_id=tenant_id
+                ).first()
                 if not product:
                     raise ValueError(f"Product {product_id} not found")
 
@@ -186,13 +194,14 @@ class SaleListResource(Resource):
                 })
 
             new_sale = Sale(
+                tenant_id      = tenant_id,
                 transaction_id = transaction_id,
                 total_amount   = total_amount,
                 amount_paid    = amount_paid,
                 change_given   = change_given,
                 payment_method = payment_method,
                 sale_date      = sale_date,
-                user_id        = user_id,
+                user_id        = user.id,
                 customer_name  = customer_name,
                 customer_phone = customer_phone,
                 payment_status = payment_status,
@@ -207,6 +216,7 @@ class SaleListResource(Resource):
                 product.stock = float(product.stock) - item["units_to_deduct"]
 
                 sale_item = SaleItem(
+                    tenant_id  = tenant_id,
                     sale_id    = new_sale.id,
                     product_id = product.id,
                     name       = product.name,
@@ -221,7 +231,9 @@ class SaleListResource(Resource):
 
         except IntegrityError:
             db.session.rollback()
-            existing_sale = Sale.query.filter_by(transaction_id=transaction_id).first()
+            existing_sale = Sale.query.filter_by(
+                tenant_id=tenant_id, transaction_id=transaction_id
+            ).first()
             if existing_sale:
                 return existing_sale.to_dict(), 200
             return {"message": "Database integrity error"}, 500

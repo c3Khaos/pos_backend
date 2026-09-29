@@ -2,35 +2,29 @@
 from decimal import Decimal
 from flask import request, current_app
 from flask_restful import Resource
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import Sale, MpesaTransaction, User
+from flask_jwt_extended import jwt_required
+from models import Sale, MpesaTransaction
 from extensions import db
 from services.kopokopo import KopoKopoService
+from utils.tenant import get_tenant_id, current_user_and_tenant
 
 
 def _expected_mpesa_amount(sale):
-    """
-    Returns the amount we expect M-Pesa to confirm for this sale.
-
-    - Split payment (cash + mpesa): compare against mpesa_amount only
-    - Pure M-Pesa:                  compare against total_amount
-    - Fallback:                     compare against total_amount
-
-    This is the fix for the AMOUNT MISMATCH bug on split payments.
-    Previously the callback always compared paid_amount against
-    total_amount, so a KSh 5 M-Pesa payment on a KSh 350 sale
-    (with KSh 345 cash) always triggered 'amount_mismatch'.
-    """
+    """Expected M-Pesa confirm amount: mpesa_amount for splits, else total."""
     if sale.mpesa_amount is not None:
         return sale.mpesa_amount
     return sale.total_amount
 
 
 class PaymentResource(Resource):
-    """POST /payments — initiate STK Push"""
+    """POST /payments — initiate STK Push (authenticated → tenant known)"""
     @jwt_required()
     def post(self):
-        data           = request.get_json()
+        user, tenant_id = current_user_and_tenant()
+        if not user or tenant_id is None:
+            return {"message": "Unauthorized."}, 401
+
+        data           = request.get_json() or {}
         phone_number   = data.get('phone_number')
         amount         = data.get('amount')
         transaction_id = data.get('transaction_id')
@@ -64,17 +58,29 @@ class PaymentResource(Resource):
         }, 200
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# WEBHOOKS — NO JWT. These come from Kopo Kopo, not a logged-in user.
+#
+# SECURITY MODEL FOR WEBHOOKS:
+#   1. Authenticity is proven by the SIGNATURE (verify_webhook), not a token.
+#   2. We derive the tenant from the SALE the payment references
+#      (via transaction_id). A payment can only touch the sale — and thus the
+#      tenant — that its transaction_id belongs to.
+#   3. The MpesaTransaction is stamped with that sale's tenant_id. If we can't
+#      resolve a sale yet (payment arrived before the sale synced), we store
+#      the transaction WITHOUT a tenant and reconcile it when the sale lands.
+#      → tenant_id on mpesa_transactions is therefore nullable-in-practice for
+#        these orphan rows; see note in the migration.
+# ═════════════════════════════════════════════════════════════════════════════
 class PaymentCallbackResource(Resource):
-    """POST /payments/callback — receives STK push results from Kopo Kopo"""
+    """POST /payments/callback — STK push results from Kopo Kopo"""
     def post(self):
         signature = request.headers.get('X-KopoKopo-Signature', '')
         if not KopoKopoService.verify_webhook(request.get_data(), signature):
             current_app.logger.warning("Invalid Kopo Kopo webhook signature")
             return {"message": "Invalid signature"}, 401
 
-        data       = request.get_json()
-        current_app.logger.info(f"STK CALLBACK PAYLOAD: {data}")
-
+        data       = request.get_json() or {}
         attributes = data.get('data', {}).get('attributes', {})
         status     = attributes.get('status')
         event      = attributes.get('event', {})
@@ -90,16 +96,23 @@ class PaymentCallbackResource(Resource):
         middle_name    = resource.get('sender_middle_name')
         last_name      = resource.get('sender_last_name')
 
+        # Idempotency — global on the kopokopo id (their id is globally unique)
         if kopokopo_id:
             existing = MpesaTransaction.query.filter_by(
                 checkout_request_id=kopokopo_id
             ).first()
             if existing:
-                current_app.logger.info("Duplicate callback — already processed")
                 return {"message": "Already processed"}, 200
 
         try:
+            # ── Resolve the sale (and therefore the tenant) ───────────────
+            sale = None
+            if transaction_id:
+                sale = Sale.query.filter_by(transaction_id=transaction_id).first()
+            derived_tenant_id = sale.tenant_id if sale else None
+
             mpesa_txn = MpesaTransaction(
+                tenant_id            = derived_tenant_id,
                 checkout_request_id  = kopokopo_id,
                 result_code          = 0 if status == 'Success' else 1,
                 result_desc          = status,
@@ -112,29 +125,18 @@ class PaymentCallbackResource(Resource):
             )
             db.session.add(mpesa_txn)
 
-            if status == 'Success' and transaction_id:
-                sale = Sale.query.filter_by(transaction_id=transaction_id).first()
-                if sale:
-                    paid_amount = Decimal(str(amount)) if amount else Decimal('0')
-                    # ── FIX: compare against mpesa_amount for split payments ──
-                    expected = _expected_mpesa_amount(sale)
-                    if abs(paid_amount - expected) > Decimal('0.01'):
-                        current_app.logger.error(
-                            f"AMOUNT MISMATCH: expected={expected} "
-                            f"got={paid_amount} "
-                            f"(total={sale.total_amount}, "
-                            f"cash={sale.cash_amount}, "
-                            f"mpesa={sale.mpesa_amount})"
-                        )
-                        sale.payment_status = 'amount_mismatch'
-                    else:
-                        sale.payment_status = 'paid'
-                        sale.amount_paid    = paid_amount
-                else:
-                    current_app.logger.info(
-                        f"Payment confirmed, awaiting sale sync: "
-                        f"reference={reference} amount={amount}"
+            if status == 'Success' and sale:
+                paid_amount = Decimal(str(amount)) if amount else Decimal('0')
+                expected    = _expected_mpesa_amount(sale)
+                if abs(paid_amount - expected) > Decimal('0.01'):
+                    current_app.logger.error(
+                        f"AMOUNT MISMATCH tenant={sale.tenant_id}: "
+                        f"expected={expected} got={paid_amount}"
                     )
+                    sale.payment_status = 'amount_mismatch'
+                else:
+                    sale.payment_status = 'paid'
+                    sale.amount_paid    = paid_amount
 
             db.session.commit()
         except Exception as e:
@@ -146,18 +148,14 @@ class PaymentCallbackResource(Resource):
 
 
 class MpesaWebhookResource(Resource):
-    """
-    POST /payments/webhook — unified endpoint for ALL Kopo Kopo webhook events
-    Handles buygoods_transaction_received AND incoming_payment results
-    """
+    """POST /payments/webhook — unified Kopo Kopo webhook endpoint"""
     def post(self):
         signature = request.headers.get('X-KopoKopo-Signature', '')
         if not KopoKopoService.verify_webhook(request.get_data(), signature):
             current_app.logger.warning("Invalid webhook signature")
             return {"message": "Invalid signature"}, 401
 
-        data = request.get_json()
-        current_app.logger.info(f"WEBHOOK RECEIVED: {data}")
+        data = request.get_json() or {}
 
         if 'topic' in data:
             return self._handle_buygoods(data)
@@ -168,7 +166,7 @@ class MpesaWebhookResource(Resource):
             return {"message": "Unknown webhook type"}, 200
 
     def _handle_buygoods(self, data):
-        """Handles till payments — manually initiated by customer"""
+        """Till payments — customer paid the till directly."""
         topic      = data.get('topic')
         event      = data.get('event', {})
         resource   = event.get('resource') or {}
@@ -186,7 +184,12 @@ class MpesaWebhookResource(Resource):
                 return {"message": "Already processed"}, 200
 
         try:
+            # ── Till payments have no transaction_id to map to a sale, so we
+            # cannot know the tenant here. We store it WITHOUT a tenant; the
+            # cashier claims/links it later (linked_transaction_id), at which
+            # point it belongs to that sale's tenant. Superadmin till log only.
             mpesa_txn = MpesaTransaction(
+                tenant_id            = None,
                 checkout_request_id  = webhook_id,
                 result_code          = 0,
                 result_desc          = resource.get('status', 'Received'),
@@ -199,10 +202,6 @@ class MpesaWebhookResource(Resource):
             )
             db.session.add(mpesa_txn)
             db.session.commit()
-            current_app.logger.info(
-                f"Till payment logged: {resource.get('reference')} "
-                f"KSh {resource.get('amount')} from {resource.get('sender_phone_number')}"
-            )
             return {"message": "Till transaction logged"}, 200
         except Exception as e:
             db.session.rollback()
@@ -210,13 +209,12 @@ class MpesaWebhookResource(Resource):
             return {"message": "Error logged"}, 200
 
     def _handle_stk_result(self, data):
-        """Handles callbacks from STK push we initiated"""
-        attributes = data.get('data', {}).get('attributes', {})
-        status     = attributes.get('status')
-        event      = attributes.get('event', {})
-        resource   = event.get('resource') or {}
-        metadata   = attributes.get('metadata', {})
-
+        """STK push results (same tenant-via-sale derivation as callback)."""
+        attributes     = data.get('data', {}).get('attributes', {})
+        status         = attributes.get('status')
+        event          = attributes.get('event', {})
+        resource       = event.get('resource') or {}
+        metadata       = attributes.get('metadata', {})
         kopokopo_id    = data.get('data', {}).get('id')
         transaction_id = metadata.get('transaction_id')
         reference      = resource.get('reference')
@@ -235,7 +233,14 @@ class MpesaWebhookResource(Resource):
 
         try:
             paid_amount = Decimal(str(amount)) if amount else None
+
+            sale = None
+            if transaction_id:
+                sale = Sale.query.filter_by(transaction_id=transaction_id).first()
+            derived_tenant_id = sale.tenant_id if sale else None
+
             mpesa_txn = MpesaTransaction(
+                tenant_id            = derived_tenant_id,
                 checkout_request_id  = kopokopo_id,
                 result_code          = 0 if status == 'Success' else 1,
                 result_desc          = status,
@@ -248,28 +253,17 @@ class MpesaWebhookResource(Resource):
             )
             db.session.add(mpesa_txn)
 
-            if status == 'Success' and transaction_id:
-                sale = Sale.query.filter_by(transaction_id=transaction_id).first()
-                if sale:
-                    # ── FIX: compare against mpesa_amount for split payments ──
-                    expected = _expected_mpesa_amount(sale)
-                    if paid_amount is not None and abs(paid_amount - expected) > Decimal('0.01'):
-                        current_app.logger.error(
-                            f"AMOUNT MISMATCH: expected={expected} "
-                            f"got={paid_amount} "
-                            f"(total={sale.total_amount}, "
-                            f"cash={sale.cash_amount}, "
-                            f"mpesa={sale.mpesa_amount})"
-                        )
-                        sale.payment_status = 'amount_mismatch'
-                    else:
-                        sale.payment_status = 'paid'
-                        sale.amount_paid    = paid_amount
-                else:
-                    current_app.logger.info(
-                        f"Payment confirmed, awaiting sale sync: "
-                        f"reference={reference} amount={amount}"
+            if status == 'Success' and sale:
+                expected = _expected_mpesa_amount(sale)
+                if paid_amount is not None and abs(paid_amount - expected) > Decimal('0.01'):
+                    current_app.logger.error(
+                        f"AMOUNT MISMATCH tenant={sale.tenant_id}: "
+                        f"expected={expected} got={paid_amount}"
                     )
+                    sale.payment_status = 'amount_mismatch'
+                else:
+                    sale.payment_status = 'paid'
+                    sale.amount_paid    = paid_amount
 
             db.session.commit()
             return {"message": "STK result processed"}, 200
@@ -280,7 +274,7 @@ class MpesaWebhookResource(Resource):
 
 
 class CheckPaymentStatusResource(Resource):
-    """GET /payments/check/<payment_id> — frontend polls STK status"""
+    """GET /payments/check/<payment_id>"""
     @jwt_required()
     def get(self, payment_id):
         try:
@@ -292,20 +286,18 @@ class CheckPaymentStatusResource(Resource):
 
 
 class MpesaTransactionListResource(Resource):
-    """
-    GET /mpesa-transactions
-    Admin: full log. Cashier: last 50 only.
-    """
+    """GET /mpesa-transactions — admin: full log; cashier: last 50 (per tenant)"""
     @jwt_required()
     def get(self):
-        user_id = int(get_jwt_identity())
-        user    = User.query.get(user_id)
+        user, tenant_id = current_user_and_tenant()
+        if not user or tenant_id is None:
+            return {"message": "Unauthorized."}, 401
 
-        query = MpesaTransaction.query.order_by(
-            MpesaTransaction.created_at.desc()
-        )
+        # ── SECURITY: only THIS tenant's transactions ────────────────────
+        query = MpesaTransaction.query.filter_by(tenant_id=tenant_id)\
+            .order_by(MpesaTransaction.created_at.desc())
 
-        if user and user.role == "admin":
+        if user.role == "admin":
             transactions = query.all()
         else:
             transactions = query.limit(50).all()
