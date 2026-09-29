@@ -533,4 +533,4 @@ class Category(db.Model):
             "id":         self.id,
             "name":       self.name,
             "created_at": iso_utc(self.created_at),
-        }
+        }# force rebuild Tue 29 Sep 2026 11:44:48 PM EAT
